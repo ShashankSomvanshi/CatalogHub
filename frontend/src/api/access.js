@@ -5,6 +5,7 @@ export const MODULE_LABELS = {
   categories: 'Category Management',
   products: 'Product Management',
   role_management: 'Role Management',
+  transactions: 'Transaction Management',
 }
 
 export const ADMIN_MENU_ITEMS = [
@@ -13,6 +14,7 @@ export const ADMIN_MENU_ITEMS = [
   'Category Management',
   'Product Management',
   'Role Management',
+  'Transaction Management',
 ]
 
 export function getStoredAdmin() {

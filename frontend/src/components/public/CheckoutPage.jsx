@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { fetchCart, placeOrder } from '../../api/cart.js'
 import { formatProductPrice, getProductImage, getProductName } from '../../api/products.js'
-import { showSuccess } from '../../utils/alerts.js'
 import PublicHeader from './PublicHeader.jsx'
 
 function readGuestCart() {
@@ -34,25 +33,7 @@ const emptyForm = {
   billing_address: '', billing_pincode: '', shipping_address: '', shipping_pincode: '', payment_method: 'card',
 }
 
-function getCardExpiryError(expiry) {
-  const match = expiry.match(/^(\d{2}) \/ (\d{2})$/)
-  if (!match) return 'Enter expiry as MM / YY.'
-
-  const month = Number(match[1])
-  if (month < 1 || month > 12) return 'Enter a valid expiry month.'
-
-  const year = 2000 + Number(match[2])
-  const now = new Date()
-  const expiryDate = new Date(year, month)
-  const currentMonth = new Date(now.getFullYear(), now.getMonth())
-
-  if (expiryDate <= currentMonth) return 'Card expiry date must be in the future.'
-
-  return ''
-}
-
 function CheckoutPage() {
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const buyNow = searchParams.get('mode') === 'buy-now'
   const authUser = readAuthUser()
@@ -62,9 +43,7 @@ function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false)
   const [sameAddress, setSameAddress] = useState(true)
   const [errors, setErrors] = useState({})
-  const [paymentErrors, setPaymentErrors] = useState({})
   const [message, setMessage] = useState('')
-  const [paymentDetails, setPaymentDetails] = useState({ card_number: '', expiry: '', cvv: '', upi_id: '', bank: '' })
   const [form, setForm] = useState({
     ...emptyForm,
     customer_type: authenticated ? 'authenticated' : 'guest',
@@ -88,36 +67,6 @@ function CheckoutPage() {
     setErrors((current) => ({ ...current, [name]: undefined }))
   }
 
-  const updatePayment = (name, value) => {
-    let nextValue = value
-    if (name === 'card_number') nextValue = value.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim()
-    if (name === 'expiry') nextValue = value.replace(/\D/g, '').slice(0, 4).replace(/^(\d{2})(\d)/, '$1 / $2')
-    if (name === 'cvv') nextValue = value.replace(/\D/g, '').slice(0, 4)
-    setPaymentDetails((current) => ({ ...current, [name]: nextValue }))
-    setPaymentErrors((current) => ({ ...current, [name]: '' }))
-  }
-
-  const selectPayment = (method) => {
-    updateForm('payment_method', method)
-    setPaymentErrors({})
-  }
-
-  const validatePayment = () => {
-    const nextErrors = {}
-    if (form.payment_method === 'card') {
-      if (paymentDetails.card_number.replace(/\s/g, '').length !== 16) nextErrors.card_number = 'Enter a valid 16-digit card number.'
-      const expiryError = getCardExpiryError(paymentDetails.expiry)
-      if (expiryError) nextErrors.expiry = expiryError
-      if (!/^\d{3,4}$/.test(paymentDetails.cvv)) nextErrors.cvv = 'Enter a valid CVV.'
-    } else if (form.payment_method === 'upi' && !/^[\w.-]+@[\w.-]+$/.test(paymentDetails.upi_id)) {
-      nextErrors.upi_id = 'Enter a valid UPI ID.'
-    } else if (form.payment_method === 'net_banking' && !paymentDetails.bank) {
-      nextErrors.bank = 'Select your bank.'
-    }
-    setPaymentErrors(nextErrors)
-    return Object.keys(nextErrors).length === 0
-  }
-
   const selectCustomerType = (customerType) => {
     setForm((current) => ({
       ...current,
@@ -131,7 +80,6 @@ function CheckoutPage() {
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (!items.length) return
-    if (!validatePayment()) return
     setSubmitting(true)
     setErrors({})
     setMessage('')
@@ -145,15 +93,9 @@ function CheckoutPage() {
     }
 
     try {
-      const order = await placeOrder(payload, authenticated)
-      if (buyNow) {
-        localStorage.removeItem('buy_now_item')
-      } else {
-        localStorage.removeItem('catalog_cart')
-        window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: 0 } }))
-      }
-      await showSuccess(`Order ${order.order_number} placed successfully`)
-      navigate('/')
+      const result = await placeOrder(payload, authenticated)
+      if (!result.checkout_url) throw new Error('Stripe Checkout URL was not returned.')
+      window.location.assign(result.checkout_url)
     } catch (error) {
       setErrors(error.response?.data?.errors || {})
       setMessage(error.response?.data?.message || 'Unable to place your order.')
@@ -188,21 +130,12 @@ function CheckoutPage() {
               <section className="checkout-card">
                 <h2>Payment method</h2>
                 <div className="checkout-payment-accordion">
-                  <PaymentOption title="Credit / Debit / ATM Card" selected={form.payment_method === 'card'} onSelect={() => selectPayment('card')}>
-                    <div className="payment-card-fields">
-                      <PaymentField label="Card Number" name="card_number" placeholder="XXXX XXXX XXXX XXXX" value={paymentDetails.card_number} onChange={updatePayment} error={paymentErrors.card_number} wide />
-                      <PaymentField label="Valid Thru" name="expiry" placeholder="MM / YY" value={paymentDetails.expiry} onChange={updatePayment} error={paymentErrors.expiry} />
-                      <PaymentField label="CVV" name="cvv" type="password" placeholder="CVV" value={paymentDetails.cvv} onChange={updatePayment} error={paymentErrors.cvv} />
-                    </div>
-                  </PaymentOption>
-                  <PaymentOption title="UPI" selected={form.payment_method === 'upi'} onSelect={() => selectPayment('upi')}>
-                    <PaymentField label="UPI ID" name="upi_id" placeholder="yourname@bank" value={paymentDetails.upi_id} onChange={updatePayment} error={paymentErrors.upi_id} wide />
-                  </PaymentOption>
-                  <PaymentOption title="Net Banking" selected={form.payment_method === 'net_banking'} onSelect={() => selectPayment('net_banking')}>
-                    <label className="payment-detail-field wide"><span>Select bank</span><select value={paymentDetails.bank} onChange={(event) => updatePayment('bank', event.target.value)} aria-invalid={Boolean(paymentErrors.bank)}><option value="">Choose your bank</option><option value="sbi">State Bank of India</option><option value="hdfc">HDFC Bank</option><option value="icici">ICICI Bank</option><option value="axis">Axis Bank</option><option value="kotak">Kotak Mahindra Bank</option></select>{paymentErrors.bank && <small>{paymentErrors.bank}</small>}</label>
-                  </PaymentOption>
+                  <section className="payment-option open">
+                    <div className="payment-option-header"><span>Stripe secure checkout</span><strong aria-hidden="true">&#10003;</strong></div>
+                    <div className="payment-option-body"><p>You will enter your payment details on Stripe&apos;s secure hosted checkout page.</p></div>
+                  </section>
                 </div>
-                <p className="checkout-payment-note">These payment details are validated only in your browser and are never stored in CatalogHub.</p>
+                <p className="checkout-payment-note">CatalogHub never receives or stores your card details.</p>
               </section>
             </div>
 
@@ -224,14 +157,6 @@ function CheckoutPage() {
 function CheckoutField({ label, name, type = 'text', value, onChange, error, textarea = false }) {
   const controlProps = { name, value, onChange: (event) => onChange(name, event.target.value), 'aria-invalid': Boolean(error) }
   return <label className={`checkout-field ${textarea ? 'wide' : ''}`}><span>{label}</span>{textarea ? <textarea {...controlProps} rows="3" /> : <input {...controlProps} type={type} />}{error && <small className="field-error">{error}</small>}</label>
-}
-
-function PaymentOption({ title, selected, onSelect, children }) {
-  return <section className={`payment-option ${selected ? 'open' : ''}`}><label className="payment-option-header"><input type="radio" name="payment_method" checked={selected} onChange={onSelect} /><span>{title}</span><strong aria-hidden="true">{selected ? '\u2303' : '\u2304'}</strong></label>{selected && <div className="payment-option-body">{children}</div>}</section>
-}
-
-function PaymentField({ label, name, type = 'text', placeholder, value, onChange, error, wide = false }) {
-  return <label className={`payment-detail-field ${wide ? 'wide' : ''}`}><span>{label}</span><input type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(name, event.target.value)} aria-invalid={Boolean(error)} autoComplete="off" />{error && <small>{error}</small>}</label>
 }
 
 export default CheckoutPage

@@ -11,6 +11,8 @@ import CategoryManagementPage from './components/admin/CategoryManagementPage.js
 import AddCategoryPage from './components/admin/AddCategoryPage.jsx'
 import EditCategoryPage from './components/admin/EditCategoryPage.jsx'
 import ProductManagementPage from './components/admin/ProductManagementPage.jsx'
+import TransactionManagementPage from './components/admin/TransactionManagementPage.jsx'
+import TransactionDetailPage from './components/admin/TransactionDetailPage.jsx'
 import ProductFormPage from './components/admin/ProductFormPage.jsx'
 import SubAdminManagementPage from './components/admin/SubAdminManagementPage.jsx'
 import SubAdminFormPage from './components/admin/SubAdminFormPage.jsx'
@@ -24,8 +26,10 @@ import HomePage from './components/public/HomePage.jsx'
 import ProductDetailPage from './components/public/ProductDetailPage.jsx'
 import CartPage from './components/public/CartPage.jsx'
 import CheckoutPage from './components/public/CheckoutPage.jsx'
+import PaymentResultPage from './components/public/PaymentResultPage.jsx'
 import CategoryProductsPage from './components/public/CategoryProductsPage.jsx'
 import CustomerProfilePage from './components/public/CustomerProfilePage.jsx'
+import MyOrdersPage from './components/public/MyOrdersPage.jsx'
 import AllProductsPage from './components/public/AllProductsPage.jsx'
 import AboutPage from './components/public/AboutPage.jsx'
 import ContactPage from './components/public/ContactPage.jsx'
@@ -100,6 +104,20 @@ function PublicOnlyRoute({ children }) {
   if (hasToken && isAdminAccount(storedUser)) {
     return <Navigate to={hasPermission('users', 'view', storedUser) ? '/admin/users' : '/admin/dashboard'} replace />
   }
+
+  return children
+}
+
+function CustomerRoute({ children }) {
+  const storedUser = JSON.parse(localStorage.getItem('auth_user') || '{}')
+  const hasToken = Boolean(localStorage.getItem('auth_token'))
+
+  if (!hasToken) {
+    localStorage.setItem('return_to', window.location.pathname)
+    return <Navigate to="/login" replace />
+  }
+
+  if (isAdminAccount(storedUser)) return <Navigate to="/admin/dashboard" replace />
 
   return children
 }
@@ -503,6 +521,34 @@ function AdminProductsPage() {
   )
 }
 
+function AdminTransactionsPage({ detail = false }) {
+  const storedAdmin = JSON.parse(localStorage.getItem('auth_user') || '{}')
+  const adminName = storedAdmin?.name || 'Admin'
+  const adminRole = storedAdmin?.role || storedAdmin?.role_name || 'Administrator'
+  const menuItems = getAdminMenuItems(storedAdmin)
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('access_token_expires_at')
+    localStorage.removeItem('refresh_token_expires_at')
+    localStorage.removeItem('auth_user')
+    localStorage.removeItem('auth_role')
+    window.location.href = '/admin'
+  }
+
+  return (
+    <main className="admin-dashboard-shell admin-panel-shell">
+      <Sidebar adminName={adminName} adminRole={adminRole} menuItems={menuItems} title="Admin Panel" subtitle="Review customer orders and payment transactions." />
+      <section className="dashboard-main admin-panel-main">
+        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} />
+        {detail ? <TransactionDetailPage /> : <TransactionManagementPage />}
+        <DashboardFooter />
+      </section>
+    </main>
+  )
+}
+
 function AdminDashboard() {
   const storedAdmin = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const adminName = storedAdmin?.name || 'Admin'
@@ -681,8 +727,11 @@ function App() {
         <Route path="/categories/:categoryId/products" element={<PublicOnlyRoute><CategoryProductsPage /></PublicOnlyRoute>} />
         <Route path="/cart" element={<PublicOnlyRoute><CartPage /></PublicOnlyRoute>} />
         <Route path="/checkout" element={<PublicOnlyRoute><CheckoutPage /></PublicOnlyRoute>} />
+        <Route path="/payment/success" element={<PublicOnlyRoute><PaymentResultPage /></PublicOnlyRoute>} />
+        <Route path="/payment/cancel" element={<PublicOnlyRoute><PaymentResultPage /></PublicOnlyRoute>} />
         <Route path="/register" element={<PublicOnlyRoute><RegisterPage /></PublicOnlyRoute>} />
-        <Route path="/user/dashboard" element={<Navigate to="/" replace />} />
+        <Route path="/user/dashboard" element={<CustomerRoute><MyOrdersPage /></CustomerRoute>} />
+        <Route path="/my-orders" element={<CustomerRoute><MyOrdersPage /></CustomerRoute>} />
         <Route path="/profile" element={<PublicOnlyRoute><CustomerProfilePage /></PublicOnlyRoute>} />
         <Route path="/admin" element={<AdminLoginPage />} />
         <Route path="/admin/dashboard" element={<AdminAccessRoute><AdminDashboard /></AdminAccessRoute>} />
@@ -695,6 +744,8 @@ function App() {
         <Route path="/admin/products" element={<AdminProductsPage />} />
         <Route path="/admin/products/new" element={<ProductFormPage mode="add" />} />
         <Route path="/admin/products/:productId/edit" element={<ProductFormPage mode="edit" />} />
+        <Route path="/admin/transactions" element={<AdminAccessRoute module="transactions"><AdminTransactionsPage /></AdminAccessRoute>} />
+        <Route path="/admin/transactions/:transactionId" element={<AdminAccessRoute module="transactions"><AdminTransactionsPage detail /></AdminAccessRoute>} />
         <Route path="/admin/sub-admins" element={<AdminSubAdminsPage />} />
         <Route path="/admin/sub-admins/new" element={<AdminSubAdminsPage mode="add" />} />
         <Route path="/admin/sub-admins/:subAdminId/edit" element={<AdminSubAdminsPage mode="edit" />} />

@@ -11,6 +11,7 @@ trait AuthorizesAdminAccess
         'categories' => 2,
         'products' => 3,
         'role_management' => 4,
+        'transactions' => 5,
     ];
 
     protected function ensureFullAdmin(Request $request, string $message = 'Only admin can perform this action.'): void

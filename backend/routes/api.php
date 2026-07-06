@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\ModulePermissionController;
 use App\Http\Controllers\Admin\UserManagementController;
+use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SubAdminController;
 use App\Http\Controllers\Admin\SubAdminPermissionController;
@@ -13,6 +14,8 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\CustomerOrderController;
+use App\Http\Controllers\StripeWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [RegisterController::class, 'register']);
@@ -25,6 +28,8 @@ Route::get('/products', [ProductController::class, 'publicIndex']);
 Route::get('/products/all', [ProductController::class, 'publicAll']);
 Route::get('/products/{product}', [ProductController::class, 'publicShow']);
 Route::post('/checkout/place-order', [CheckoutController::class, 'store']);
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
+Route::get('/stripe/checkout-status', [StripeWebhookController::class, 'status']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
@@ -33,6 +38,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::post('/profile', [ProfileController::class, 'update']);
     Route::get('/cart', [CartController::class, 'show']);
+    Route::get('/my-orders', [CustomerOrderController::class, 'index']);
     Route::put('/cart', [CartController::class, 'sync']);
     Route::post('/cart/items', [CartController::class, 'storeItem']);
     Route::patch('/cart/items/{cartItem}', [CartController::class, 'updateItem']);
@@ -74,4 +80,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/products/{product}', [ProductController::class, 'show']);
     Route::put('/admin/products/{product}', [ProductController::class, 'update']);
     Route::delete('/admin/products/{product}', [ProductController::class, 'destroy']);
+    Route::middleware('admin.access:transactions')->group(function () {
+        Route::get('/admin/transactions', [TransactionController::class, 'index']);
+        Route::get('/admin/transactions/{transaction}', [TransactionController::class, 'show']);
+    });
 });

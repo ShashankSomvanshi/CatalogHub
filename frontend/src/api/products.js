@@ -106,5 +106,5 @@ export function formatProductPrice(price) {
 
   return Number.isNaN(amount)
     ? price
-    : amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+    : amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })
 }

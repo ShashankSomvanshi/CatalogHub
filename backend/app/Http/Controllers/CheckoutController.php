@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,11 +12,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Stripe\StripeClient;
 
 class CheckoutController extends Controller
 {
     public function store(Request $request): JsonResponse
     {
+        if (! config('services.stripe.secret')) {
+            return response()->json(['message' => 'Stripe is not configured.'], 503);
+        }
+
         $validated = $request->validate([
             'customer_type' => ['required', Rule::in(['guest', 'existing', 'new', 'authenticated'])],
             'name' => ['required_if:customer_type,guest,new', 'nullable', 'string', 'max:255'],
@@ -43,7 +49,7 @@ class CheckoutController extends Controller
             return response()->json(['message' => 'One or more products are no longer available.'], 422);
         }
 
-        $order = DB::transaction(function () use ($request, $validated, $products): Order {
+        [$order, $transaction] = DB::transaction(function () use ($request, $validated, $products): array {
             $user = $validated['customer_type'] === 'authenticated'
                 ? $request->user()
                 : $this->resolveUser($validated);
@@ -84,14 +90,74 @@ class CheckoutController extends Controller
                 ]);
             }
 
-            if ($user && ($validated['checkout_source'] ?? 'cart') !== 'buy_now') {
-                $user->cart?->items()->delete();
-            }
+            $transaction = $order->transactions()->create([
+                'transaction_number' => 'TXN-' . now()->format('Ymd') . '-' . Str::upper(Str::random(10)),
+                'amount' => $order->final_amount,
+                'currency' => 'INR',
+                'payment_gateway' => 'stripe',
+                'payment_method' => $validated['payment_method'],
+                'status' => 'pending',
+            ]);
 
-            return $order->load('items');
+            return [$order->load('items'), $transaction];
         });
 
-        return response()->json(['message' => 'Order placed successfully', 'order' => $order], 201);
+        try {
+            $stripe = new StripeClient(config('services.stripe.secret'));
+            $frontendUrl = rtrim(config('services.frontend_url'), '/');
+            $session = $stripe->checkout->sessions->create([
+                'mode' => 'payment',
+                'client_reference_id' => (string) $order->id,
+                'customer_email' => $order->customer_email,
+                'line_items' => $order->items->map(fn ($item): array => [
+                    'quantity' => $item->quantity,
+                    'price_data' => [
+                        'currency' => 'inr',
+                        'unit_amount' => (int) round((float) $item->unit_price * 100),
+                        'product_data' => [
+                            'name' => $item->product_name,
+                            'metadata' => ['product_id' => (string) ($item->product_id ?? '')],
+                        ],
+                    ],
+                ])->values()->all(),
+                'metadata' => [
+                    'order_id' => (string) $order->id,
+                    'transaction_id' => (string) $transaction->id,
+                    'transaction_number' => $transaction->transaction_number,
+                ],
+                'payment_intent_data' => [
+                    'metadata' => [
+                        'order_id' => (string) $order->id,
+                        'transaction_id' => (string) $transaction->id,
+                    ],
+                ],
+                'success_url' => $frontendUrl . '/payment/success?session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url' => $frontendUrl . '/payment/cancel?order=' . urlencode($order->order_number),
+            ]);
+
+            $transaction->update([
+                'gateway_order_id' => $session->id,
+                'gateway_response' => [
+                    'checkout_session_id' => $session->id,
+                    'payment_status' => $session->payment_status,
+                ],
+            ]);
+        } catch (\Throwable $exception) {
+            report($exception);
+            $transaction->update([
+                'status' => 'failed',
+                'failure_reason' => 'Unable to start Stripe Checkout.',
+            ]);
+
+            return response()->json(['message' => 'Unable to start payment. Please try again.'], 502);
+        }
+
+        return response()->json([
+            'message' => 'Stripe Checkout created successfully.',
+            'order' => $order,
+            'transaction_number' => $transaction->transaction_number,
+            'checkout_url' => $session->url,
+        ], 201);
     }
 
     private function resolveUser(array $validated): ?User

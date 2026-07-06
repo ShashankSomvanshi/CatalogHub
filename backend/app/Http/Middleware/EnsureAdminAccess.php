@@ -13,6 +13,7 @@ class EnsureAdminAccess
         'categories' => 2,
         'products' => 3,
         'role_management' => 4,
+        'transactions' => 5,
     ];
 
     public function handle(Request $request, Closure $next, ?string $module = null): Response

@@ -30,5 +30,5 @@ export async function removeCartItem(cartItemId) {
 export async function placeOrder(payload, authenticated = false) {
   const endpoint = authenticated ? '/api/checkout/place-order-authenticated' : '/api/checkout/place-order'
   const response = await api.post(endpoint, payload)
-  return response.data.order
+  return response.data
 }

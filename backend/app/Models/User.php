@@ -83,6 +83,7 @@ class User extends Authenticatable
                 2 => 'categories',
                 3 => 'products',
                 4 => 'role_management',
+                5 => 'transactions',
             },
             'module_id' => $module->id,
             'module_name' => $module->module_name,
