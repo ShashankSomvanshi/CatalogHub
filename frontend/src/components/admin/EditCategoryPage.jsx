@@ -19,6 +19,7 @@ function EditCategoryPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
+  const [errors, setErrors] = useState({})
 
   const handleLogout = () => {
     localStorage.removeItem('auth_token')
@@ -73,6 +74,10 @@ function EditCategoryPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    const nextErrors = {}
+    if (!form.name.trim()) nextErrors.name = 'Category name is required.'
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
     setSaving(true)
     setMessage({ type: '', text: '' })
 
@@ -84,7 +89,9 @@ function EditCategoryPage() {
       await showSuccess('Category updated successfully')
       navigate('/admin/categories')
     } catch (error) {
-      setMessage({
+      const nameError = error.response?.data?.errors?.name?.[0]
+      if (nameError) setErrors({ name: nameError })
+      else setMessage({
         type: 'error',
         text: error.response?.data?.message || 'Update failed.',
       })
@@ -98,16 +105,17 @@ function EditCategoryPage() {
       <Sidebar adminName={adminName} adminRole={adminRole} menuItems={menuItems} title="Admin Panel" subtitle="Manage users, categories, products, and permissions." />
 
       <section className="dashboard-main admin-panel-main">
-        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} actionButton={<Link to="/admin/categories" className="ghost-btn">Back to Categories</Link>} />
+        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} />
 
         <section className="dashboard-main-content admin-main-content">
           <section className="admin-form-section">
             <article className="panel-card admin-form-card">
               <div className="admin-form-head">
                 <div>
-                  <h3>Edit category</h3>
+                  <h3>Edit Category</h3>
                   <p className="subtext">Update category name and status.</p>
                 </div>
+                <Link to="/admin/categories" className="ghost-btn">Back to Categories</Link>
               </div>
 
               {message.text ? <p className={`status-message ${message.type}`}>{message.text}</p> : null}
@@ -115,17 +123,17 @@ function EditCategoryPage() {
               {loading ? (
                 <p className="subtext">Loading category details...</p>
               ) : (
-                <form className="admin-record-form" onSubmit={handleSubmit}>
+                <form className="admin-record-form" onSubmit={handleSubmit} noValidate>
                   <div className="form-grid">
-                    <label>Name<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Enter category name" required /></label>
-                    <label>Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
+                    <label><span className="field-label">Name <span className="required-mark">*</span></span><input value={form.name} onChange={(event) => { setForm({ ...form, name: event.target.value }); setErrors({ ...errors, name: '' }) }} placeholder="Enter category name" aria-invalid={Boolean(errors.name)} />{errors.name && <small className="admin-field-error">{errors.name}</small>}</label>
+                    <label><span className="field-label">Status</span><select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
                     </select></label>
                   </div>
 
                   <div className="form-actions">
-                    <button type="submit" className="submit-btn admin-btn" disabled={saving}>{saving ? 'Saving...' : 'Save changes'}</button>
+                    <button type="submit" className="submit-btn admin-btn" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
                     <Link to="/admin/categories" className="ghost-btn">Cancel</Link>
                   </div>
                 </form>

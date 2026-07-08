@@ -29,3 +29,17 @@ export function showSuccess(title) {
     color: '#f8fafc',
   })
 }
+
+export function showToast(title, icon = 'success') {
+  return Swal.fire({
+    title,
+    icon,
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 2200,
+    timerProgressBar: true,
+    background: '#0f172a',
+    color: '#f8fafc',
+  })
+}

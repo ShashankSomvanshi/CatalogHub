@@ -61,7 +61,11 @@ function saveAuthData(data, role = 'user') {
 
   const user = getAuthUser(data)
   if (user) {
-    localStorage.setItem('auth_user', JSON.stringify(user))
+    const storedUser = (() => {
+      try { return JSON.parse(localStorage.getItem('auth_user') || '{}') }
+      catch { return {} }
+    })()
+    localStorage.setItem('auth_user', JSON.stringify({ ...storedUser, ...user }))
   }
 
   localStorage.setItem('auth_role', role)
@@ -71,7 +75,7 @@ function isAdminAccount(admin = {}) {
   return isFullAdmin(admin) || admin?.role === 'sub_admin' || Number(admin?.role_id) === 2
 }
 
-function AdminAccessRoute({ module, children }) {
+function AdminAccessRoute({ module, action = 'view', children }) {
   const storedAdmin = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const hasToken = Boolean(localStorage.getItem('auth_token'))
 
@@ -79,7 +83,7 @@ function AdminAccessRoute({ module, children }) {
     return <Navigate to="/admin" replace />
   }
 
-  if (module && !hasPermission(module, 'view', storedAdmin)) {
+  if (module && !hasPermission(module, action, storedAdmin)) {
     return <Navigate to="/admin/dashboard" replace />
   }
 
@@ -91,7 +95,7 @@ function HomeRoute() {
   const hasToken = Boolean(localStorage.getItem('auth_token'))
 
   if (hasToken && isAdminAccount(storedUser)) {
-    return <Navigate to={hasPermission('users', 'view', storedUser) ? '/admin/users' : '/admin/dashboard'} replace />
+    return <Navigate to="/admin/dashboard" replace />
   }
 
   return <HomePage />
@@ -102,7 +106,7 @@ function PublicOnlyRoute({ children }) {
   const hasToken = Boolean(localStorage.getItem('auth_token'))
 
   if (hasToken && isAdminAccount(storedUser)) {
-    return <Navigate to={hasPermission('users', 'view', storedUser) ? '/admin/users' : '/admin/dashboard'} replace />
+    return <Navigate to="/admin/dashboard" replace />
   }
 
   return children
@@ -126,6 +130,7 @@ function PublicLoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
+  const [errors, setErrors] = useState({})
   const cartCount = (() => {
     try {
       const cart = JSON.parse(localStorage.getItem('catalog_cart') || '[]')
@@ -137,6 +142,12 @@ function PublicLoginPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    const nextErrors = {}
+    if (!form.email.trim()) nextErrors.email = 'Email is required.'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) nextErrors.email = 'Enter a valid email address.'
+    if (!form.password) nextErrors.password = 'Password is required.'
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
     setLoading(true)
     setMessage({ type: '', text: '' })
 
@@ -189,9 +200,9 @@ function PublicLoginPage() {
             <p className="public-kicker">Customer login</p>
             <h2>Welcome back</h2>
             <p className="subtext">Enter your account details to continue.</p>
-            <form className="auth-form" onSubmit={handleSubmit}>
-              <label>Email address<input type="email" placeholder="you@example.com" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>
-              <label>Password<input type="password" placeholder="Enter your password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required /></label>
+            <form className="auth-form" onSubmit={handleSubmit} noValidate>
+              <label><span className="field-label">Email address <span className="required-mark">*</span></span><input type="text" inputMode="email" placeholder="you@example.com" value={form.email} onChange={(event) => { setForm({ ...form, email: event.target.value }); setErrors({ ...errors, email: '' }) }} aria-invalid={Boolean(errors.email)} />{errors.email && <small className="field-error">{errors.email}</small>}</label>
+              <label><span className="field-label">Password <span className="required-mark">*</span></span><input type="password" placeholder="Enter your password" value={form.password} onChange={(event) => { setForm({ ...form, password: event.target.value }); setErrors({ ...errors, password: '' }) }} aria-invalid={Boolean(errors.password)} />{errors.password && <small className="field-error">{errors.password}</small>}</label>
               {message.text ? <p className={`status-message ${message.type}`}>{message.text}</p> : null}
               <button type="submit" className="submit-btn" disabled={loading}>{loading ? 'Signing in...' : 'Sign in'}</button>
             </form>
@@ -226,19 +237,25 @@ function RegisterPage() {
   })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
+  const [errors, setErrors] = useState({})
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    const nextErrors = {}
+    if (!form.name.trim()) nextErrors.name = 'Full name is required.'
+    if (!form.email.trim()) nextErrors.email = 'Email is required.'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) nextErrors.email = 'Enter a valid email address.'
+    if (!form.phone.trim()) nextErrors.phone = 'Phone number is required.'
+    if (!form.password) nextErrors.password = 'Password is required.'
+    else if (form.password.length < 8) nextErrors.password = 'Password must be at least 8 characters.'
+    if (!form.confirm_password) nextErrors.confirm_password = 'Confirm password is required.'
+    else if (form.password !== form.confirm_password) nextErrors.confirm_password = 'Passwords do not match.'
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
     setLoading(true)
     setMessage({ type: '', text: '' })
 
     try {
-      if (form.password !== form.confirm_password) {
-        setLoading(false)
-        setMessage({ type: 'error', text: 'Passwords do not match.' })
-        return
-      }
-
       await prepareSanctumSession()
 
       const payload = new FormData()
@@ -280,13 +297,13 @@ function RegisterPage() {
 
           <article className="public-login-card public-register-card">
             <p className="public-kicker">Customer registration</p><h2>Create your account</h2><p className="subtext">Enter your details to get started with CatalogHub.</p>
-            <form className="auth-form public-register-form" onSubmit={handleSubmit}>
-              <label>Full name<input type="text" placeholder="John Doe" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
-              <label>Email address<input type="email" placeholder="john@example.com" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>
-              <label>Phone number<input type="text" placeholder="Enter phone number" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} required /></label>
-              <label>Password<input type="password" placeholder="Minimum 8 characters" minLength="8" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required /></label>
-              <label>Confirm password<input type="password" placeholder="Re-enter password" minLength="8" value={form.confirm_password} onChange={(event) => setForm({ ...form, confirm_password: event.target.value })} required /></label>
-              <label className="register-file-field">Profile picture <span>Optional, JPG, PNG or WebP</span><input type="file" accept="image/jpg,image/jpeg,image/png,image/webp" onChange={(event) => setForm({ ...form, profile_pic: event.target.files?.[0] || null })} /></label>
+            <form className="auth-form public-register-form" onSubmit={handleSubmit} noValidate>
+              <label><span className="field-label">Full name <span className="required-mark">*</span></span><input type="text" placeholder="John Doe" value={form.name} onChange={(event) => { setForm({ ...form, name: event.target.value }); setErrors({ ...errors, name: '' }) }} aria-invalid={Boolean(errors.name)} />{errors.name && <small className="field-error">{errors.name}</small>}</label>
+              <label><span className="field-label">Email address <span className="required-mark">*</span></span><input type="text" inputMode="email" placeholder="john@example.com" value={form.email} onChange={(event) => { setForm({ ...form, email: event.target.value }); setErrors({ ...errors, email: '' }) }} aria-invalid={Boolean(errors.email)} />{errors.email && <small className="field-error">{errors.email}</small>}</label>
+              <label><span className="field-label">Phone number <span className="required-mark">*</span></span><input type="text" placeholder="Enter phone number" value={form.phone} onChange={(event) => { setForm({ ...form, phone: event.target.value }); setErrors({ ...errors, phone: '' }) }} aria-invalid={Boolean(errors.phone)} />{errors.phone && <small className="field-error">{errors.phone}</small>}</label>
+              <label><span className="field-label">Password <span className="required-mark">*</span></span><input type="password" placeholder="Minimum 8 characters" value={form.password} onChange={(event) => { setForm({ ...form, password: event.target.value }); setErrors({ ...errors, password: '' }) }} aria-invalid={Boolean(errors.password)} />{errors.password && <small className="field-error">{errors.password}</small>}</label>
+              <label><span className="field-label">Confirm password <span className="required-mark">*</span></span><input type="password" placeholder="Re-enter password" value={form.confirm_password} onChange={(event) => { setForm({ ...form, confirm_password: event.target.value }); setErrors({ ...errors, confirm_password: '' }) }} aria-invalid={Boolean(errors.confirm_password)} />{errors.confirm_password && <small className="field-error">{errors.confirm_password}</small>}</label>
+              <label className="register-file-field"><span className="field-label">Profile picture</span> <span>Optional, JPG, PNG or WebP</span><input type="file" accept="image/jpg,image/jpeg,image/png,image/webp" onChange={(event) => setForm({ ...form, profile_pic: event.target.files?.[0] || null })} /></label>
               {message.text ? <p className={`status-message ${message.type}`}>{message.text}</p> : null}
               <button type="submit" className="submit-btn" disabled={loading}>{loading ? 'Creating account...' : 'Create account'}</button>
             </form>
@@ -304,9 +321,16 @@ function AdminLoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
+  const [errors, setErrors] = useState({})
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    const nextErrors = {}
+    if (!form.email.trim()) nextErrors.email = 'Admin email is required.'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) nextErrors.email = 'Enter a valid email address.'
+    if (!form.password) nextErrors.password = 'Password is required.'
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
     setLoading(true)
     setMessage({ type: '', text: '' })
 
@@ -324,8 +348,7 @@ function AdminLoginPage() {
         return
       }
 
-      const loggedInAdmin = response.data?.user || {}
-      window.location.href = hasPermission('users', 'view', loggedInAdmin) ? '/admin/users' : '/admin/dashboard'
+      window.location.href = '/admin/dashboard'
     } catch (error) {
       setMessage({
         type: 'error',
@@ -359,27 +382,30 @@ function AdminLoginPage() {
           <h2>Admin sign in</h2>
           <p className="subtext">Use your admin credentials to access the management area.</p>
 
-          <form className="auth-form" onSubmit={handleSubmit}>
+          <form className="auth-form" onSubmit={handleSubmit} noValidate>
             <label>
-              Admin email
+              <span className="field-label">Admin email <span className="required-mark">*</span></span>
               <input
-                type="email"
+                type="text"
+                inputMode="email"
                 placeholder="admin@example.com"
                 value={form.email}
-                onChange={(event) => setForm({ ...form, email: event.target.value })}
-                required
+                onChange={(event) => { setForm({ ...form, email: event.target.value }); setErrors({ ...errors, email: '' }) }}
+                aria-invalid={Boolean(errors.email)}
               />
+              {errors.email && <small className="field-error">{errors.email}</small>}
             </label>
 
             <label>
-              Password
+              <span className="field-label">Password <span className="required-mark">*</span></span>
               <input
                 type="password"
                 placeholder="••••••••"
                 value={form.password}
-                onChange={(event) => setForm({ ...form, password: event.target.value })}
-                required
+                onChange={(event) => { setForm({ ...form, password: event.target.value }); setErrors({ ...errors, password: '' }) }}
+                aria-invalid={Boolean(errors.password)}
               />
+              {errors.password && <small className="field-error">{errors.password}</small>}
             </label>
 
             {message.text ? <p className={`status-message ${message.type}`}>{message.text}</p> : null}
@@ -430,7 +456,7 @@ function AdminUsersPage() {
           adminName={adminName}
           adminRole={adminRole}
           onLogout={handleLogout}
-          actionButton={isFullAdmin(storedAdmin) ? <Link to="/admin/users/new" className="ghost-btn">Add New User</Link> : null}
+          actionButton={hasPermission('users', 'create', storedAdmin) ? <Link to="/admin/users/new" className="ghost-btn">Add New User</Link> : null}
         />
         <UserManagementPage />
         <DashboardFooter />
@@ -471,7 +497,7 @@ function AdminCategoriesPage() {
           adminName={adminName}
           adminRole={adminRole}
           onLogout={handleLogout}
-          actionButton={isFullAdmin(storedAdmin) ? <Link to="/admin/categories/new" className="ghost-btn">Add Category</Link> : null}
+          actionButton={hasPermission('categories', 'create', storedAdmin) ? <Link to="/admin/categories/new" className="ghost-btn">Add Category</Link> : null}
         />
         <CategoryManagementPage />
         <DashboardFooter />
@@ -512,7 +538,7 @@ function AdminProductsPage() {
           adminName={adminName}
           adminRole={adminRole}
           onLogout={handleLogout}
-          actionButton={isFullAdmin(storedAdmin) ? <Link to="/admin/products/new" className="ghost-btn">Add Product</Link> : null}
+          actionButton={hasPermission('products', 'create', storedAdmin) ? <Link to="/admin/products/new" className="ghost-btn">Add Product</Link> : null}
         />
         <ProductManagementPage />
         <DashboardFooter />
@@ -668,9 +694,7 @@ function AdminRolePermissionsPage({ mode = 'list' }) {
           adminName={adminName}
           adminRole={adminRole}
           onLogout={handleLogout}
-          actionButton={mode === 'list'
-            ? (isFullAdmin(storedAdmin) ? <Link to="/admin/role-permissions/new" className="ghost-btn">Add New Role</Link> : null)
-            : <Link to="/admin/role-permissions" className="ghost-btn">Back to Roles</Link>}
+          actionButton={mode === 'list' && hasPermission('role_management', 'create', storedAdmin) ? <Link to="/admin/role-permissions/new" className="ghost-btn">Add New Role</Link> : null}
         />
         {mode === 'permissions' ? <SubAdminPermissionPage /> : mode === 'add' ? <RoleFormPage mode="add" /> : mode === 'edit' ? <RoleFormPage mode="edit" /> : <RolePermissionManagementPage />}
         <DashboardFooter />
@@ -736,25 +760,25 @@ function App() {
         <Route path="/admin" element={<AdminLoginPage />} />
         <Route path="/admin/dashboard" element={<AdminAccessRoute><AdminDashboard /></AdminAccessRoute>} />
         <Route path="/admin/users" element={<AdminAccessRoute module="users"><AdminUsersPage /></AdminAccessRoute>} />
-        <Route path="/admin/users/new" element={<AdminAccessRoute module="users"><AddNewUserPage /></AdminAccessRoute>} />
-        <Route path="/admin/users/:userId/edit" element={<AdminAccessRoute module="users"><EditUserPage /></AdminAccessRoute>} />
-        <Route path="/admin/categories" element={<AdminCategoriesPage />} />
-        <Route path="/admin/categories/new" element={<AddCategoryPage />} />
-        <Route path="/admin/categories/:categoryId/edit" element={<EditCategoryPage />} />
-        <Route path="/admin/products" element={<AdminProductsPage />} />
-        <Route path="/admin/products/new" element={<ProductFormPage mode="add" />} />
-        <Route path="/admin/products/:productId/edit" element={<ProductFormPage mode="edit" />} />
+        <Route path="/admin/users/new" element={<AdminAccessRoute module="users" action="create"><AddNewUserPage /></AdminAccessRoute>} />
+        <Route path="/admin/users/:userId/edit" element={<AdminAccessRoute module="users" action="update"><EditUserPage /></AdminAccessRoute>} />
+        <Route path="/admin/categories" element={<AdminAccessRoute module="categories"><AdminCategoriesPage /></AdminAccessRoute>} />
+        <Route path="/admin/categories/new" element={<AdminAccessRoute module="categories" action="create"><AddCategoryPage /></AdminAccessRoute>} />
+        <Route path="/admin/categories/:categoryId/edit" element={<AdminAccessRoute module="categories" action="update"><EditCategoryPage /></AdminAccessRoute>} />
+        <Route path="/admin/products" element={<AdminAccessRoute module="products"><AdminProductsPage /></AdminAccessRoute>} />
+        <Route path="/admin/products/new" element={<AdminAccessRoute module="products" action="create"><ProductFormPage mode="add" /></AdminAccessRoute>} />
+        <Route path="/admin/products/:productId/edit" element={<AdminAccessRoute module="products" action="update"><ProductFormPage mode="edit" /></AdminAccessRoute>} />
         <Route path="/admin/transactions" element={<AdminAccessRoute module="transactions"><AdminTransactionsPage /></AdminAccessRoute>} />
         <Route path="/admin/transactions/:transactionId" element={<AdminAccessRoute module="transactions"><AdminTransactionsPage detail /></AdminAccessRoute>} />
-        <Route path="/admin/sub-admins" element={<AdminSubAdminsPage />} />
-        <Route path="/admin/sub-admins/new" element={<AdminSubAdminsPage mode="add" />} />
-        <Route path="/admin/sub-admins/:subAdminId/edit" element={<AdminSubAdminsPage mode="edit" />} />
-        <Route path="/admin/sub-admins/:subAdminId/permissions" element={<AdminSubAdminsPage mode="permissions" />} />
-        <Route path="/admin/role-permissions" element={<AdminRolePermissionsPage />} />
-        <Route path="/admin/role-permissions/new" element={<AdminRolePermissionsPage mode="add" />} />
-        <Route path="/admin/role-permissions/:subAdminRoleId/edit" element={<AdminRolePermissionsPage mode="edit" />} />
-        <Route path="/admin/role-permissions/:subAdminRoleId" element={<AdminRolePermissionsPage mode="permissions" />} />
-        <Route path="/admin/profile" element={<AdminProfilePage />} />
+        <Route path="/admin/sub-admins" element={<AdminAccessRoute><AdminSubAdminsPage /></AdminAccessRoute>} />
+        <Route path="/admin/sub-admins/new" element={<AdminAccessRoute><AdminSubAdminsPage mode="add" /></AdminAccessRoute>} />
+        <Route path="/admin/sub-admins/:subAdminId/edit" element={<AdminAccessRoute><AdminSubAdminsPage mode="edit" /></AdminAccessRoute>} />
+        <Route path="/admin/sub-admins/:subAdminId/permissions" element={<AdminAccessRoute><AdminSubAdminsPage mode="permissions" /></AdminAccessRoute>} />
+        <Route path="/admin/role-permissions" element={<AdminAccessRoute module="role_management"><AdminRolePermissionsPage /></AdminAccessRoute>} />
+        <Route path="/admin/role-permissions/new" element={<AdminAccessRoute module="role_management" action="create"><AdminRolePermissionsPage mode="add" /></AdminAccessRoute>} />
+        <Route path="/admin/role-permissions/:subAdminRoleId/edit" element={<AdminAccessRoute module="role_management" action="update"><AdminRolePermissionsPage mode="edit" /></AdminAccessRoute>} />
+        <Route path="/admin/role-permissions/:subAdminRoleId" element={<AdminAccessRoute module="role_management"><AdminRolePermissionsPage mode="permissions" /></AdminAccessRoute>} />
+        <Route path="/admin/profile" element={<AdminAccessRoute><AdminProfilePage /></AdminAccessRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

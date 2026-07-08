@@ -15,21 +15,44 @@ class ModulePermissionController extends Controller
 
     public function show(Request $request, SubAdminRole $subAdminRole): JsonResponse
     {
-        $this->ensureFullAdmin($request, 'Only admin can assign role permissions.');
+        $this->ensureAdminOrPermission($request, 'role_management', 'view');
 
         return response()->json($this->payload($subAdminRole));
     }
 
     public function update(Request $request, SubAdminRole $subAdminRole): JsonResponse
     {
-        $this->ensureFullAdmin($request, 'Only admin can assign role permissions.');
+        $this->ensureAdminOrPermission($request, 'role_management', 'update');
 
         $validated = $request->validate([
-            'module_ids' => ['present', 'array'],
-            'module_ids.*' => ['integer', 'distinct', 'exists:modules,id'],
+            'permissions' => ['present', 'array'],
+            'permissions.*.module_id' => ['required', 'integer', 'distinct', 'exists:modules,id'],
+            'permissions.*.can_view' => ['nullable', 'boolean'],
+            'permissions.*.can_create' => ['nullable', 'boolean'],
+            'permissions.*.can_update' => ['nullable', 'boolean'],
+            'permissions.*.can_delete' => ['nullable', 'boolean'],
         ]);
 
-        $subAdminRole->modules()->sync($validated['module_ids']);
+        $syncData = [];
+        foreach ($validated['permissions'] as $permission) {
+            $canCreate = (bool) ($permission['can_create'] ?? false);
+            $canUpdate = (bool) ($permission['can_update'] ?? false);
+            $canDelete = (bool) ($permission['can_delete'] ?? false);
+            $canView = (bool) ($permission['can_view'] ?? false) || $canCreate || $canUpdate || $canDelete;
+
+            if (! $canView) {
+                continue;
+            }
+
+            $syncData[$permission['module_id']] = [
+                'can_view' => $canView,
+                'can_create' => $canCreate,
+                'can_update' => $canUpdate,
+                'can_delete' => $canDelete,
+            ];
+        }
+
+        $subAdminRole->modules()->sync($syncData);
 
         return response()->json(array_merge(
             ['message' => 'Role permissions updated successfully.'],
@@ -39,14 +62,18 @@ class ModulePermissionController extends Controller
 
     private function payload(SubAdminRole $subAdminRole): array
     {
-        $selectedIds = $subAdminRole->modules()->pluck('modules.id');
+        $selectedModules = $subAdminRole->modules()->get()->keyBy('id');
 
         return [
             'sub_admin_role' => $subAdminRole->only(['id', 'name']),
             'modules' => Module::orderBy('id')->get(['id', 'module_name'])->map(fn (Module $module): array => [
                 'id' => $module->id,
                 'module_name' => $module->module_name,
-                'selected' => $selectedIds->contains($module->id),
+                'selected' => $selectedModules->has($module->id),
+                'can_view' => (bool) optional(optional($selectedModules->get($module->id))->pivot)->can_view,
+                'can_create' => (bool) optional(optional($selectedModules->get($module->id))->pivot)->can_create,
+                'can_update' => (bool) optional(optional($selectedModules->get($module->id))->pivot)->can_update,
+                'can_delete' => (bool) optional(optional($selectedModules->get($module->id))->pivot)->can_delete,
             ]),
         ];
     }

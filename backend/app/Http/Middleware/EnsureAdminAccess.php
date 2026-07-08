@@ -55,6 +55,9 @@ class EnsureAdminAccess
 
         return (bool) $moduleId
             && $user->subAdminRole
-            && $user->subAdminRole->modules()->where('modules.id', $moduleId)->exists();
+            && $user->subAdminRole->modules()
+                ->where('modules.id', $moduleId)
+                ->where('module_permission.can_view', true)
+                ->exists();
     }
 }

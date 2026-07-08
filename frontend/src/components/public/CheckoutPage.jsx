@@ -111,7 +111,7 @@ function CheckoutPage() {
         <div className="checkout-heading"><p className="public-kicker">Secure checkout</p><h1>Complete your order</h1></div>
         {message && <p className="cart-error" role="alert">{message}</p>}
         {loading ? <section className="cart-empty-state"><h2>Loading checkout...</h2></section> : !items.length ? (
-          <section className="cart-empty-state"><h2>Your cart is empty</h2><Link to="/">Continue shopping</Link></section>
+          <section className="cart-empty-state"><h2>Your cart is empty</h2><Link to="/">Continue Shopping</Link></section>
         ) : (
           <form className="checkout-layout" onSubmit={handleSubmit} noValidate>
             <div className="checkout-sections">

@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api/client.js'
-import { isFullAdmin } from '../../api/access.js'
+import { hasPermission } from '../../api/access.js'
 import { fetchRoles, getRoleId, getRoleName } from '../../api/roles.js'
-import { confirmDelete, showSuccess } from '../../utils/alerts.js'
+import { confirmDelete, showSuccess, showToast } from '../../utils/alerts.js'
+import SortableHeader from './SortableHeader.jsx'
+import useSortableRows from './useSortableRows.js'
+import { matchesTableSearch } from '../../utils/tableSearch.js'
+import TableLoader from './TableLoader.jsx'
 
 function UserManagementPage() {
-  const canManageUsers = isFullAdmin()
+  const storedAdmin = JSON.parse(localStorage.getItem('auth_user') || '{}')
+  const canUpdateUsers = hasPermission('users', 'update', storedAdmin)
+  const canDeleteUsers = hasPermission('users', 'delete', storedAdmin)
   const pageSizeOptions = [5, 10, 25]
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -141,43 +147,56 @@ function UserManagementPage() {
     try {
       await api.put(`/api/admin/users/${user.id}`, { status: nextStatus })
       setUsers((current) => current.map((item) => item.id === user.id ? { ...item, status: nextStatus } : item))
-      setMessage({ type: 'success', text: `User marked ${nextStatus}.` })
+      await showToast(`User marked ${nextStatus}.`)
     } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.message || 'Unable to update user status.' })
+      await showToast(error.response?.data?.message || 'Unable to update user status.', 'error')
     } finally {
       setUpdatingStatusId(null)
     }
   }
 
   const filteredUsers = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase()
-    if (!query) return users
-
     return users.filter((user) => {
       const matchedRole = roles.find((role) => getRoleId(role) === String(user.role_id))
       const roleLabel = user.sub_role_name || user.role_name || user.role || (matchedRole ? getRoleName(matchedRole) : '')
 
-      return [
+      return matchesTableSearch([
         user.id,
         user.name,
         user.email,
         user.phone,
         user.phone_no,
+        user.city,
+        user.state,
         roleLabel,
         user.status,
-      ].some((value) => String(value || '').toLowerCase().includes(query))
+        user.created_at,
+      ], searchTerm)
     })
   }, [roles, searchTerm, users])
 
-  const totalUsers = filteredUsers.length
+  const { sortedRows, sort, requestSort } = useSortableRows(filteredUsers, {
+    serial: (user) => Number(user.id),
+    user: (user) => user.name,
+    contact: (user) => user.email,
+    city: (user) => user.city,
+    state: (user) => user.state,
+    role: (user) => {
+      const matchedRole = roles.find((role) => getRoleId(role) === String(user.role_id))
+      return user.sub_role_name || user.role_name || user.role || (matchedRole ? getRoleName(matchedRole) : '')
+    },
+    created: (user) => new Date(user.created_at).getTime(),
+  }, 'user')
+
+  const totalUsers = sortedRows.length
   const totalPages = Math.max(1, Math.ceil(totalUsers / pageSize))
   const safeCurrentPage = Math.min(currentPage, totalPages)
   const startIndex = totalUsers === 0 ? 0 : (safeCurrentPage - 1) * pageSize
   const endIndex = Math.min(startIndex + pageSize, totalUsers)
 
   const usersRows = useMemo(
-    () => filteredUsers.slice(startIndex, endIndex),
-    [endIndex, filteredUsers, startIndex],
+    () => sortedRows.slice(startIndex, endIndex),
+    [endIndex, sortedRows, startIndex],
   )
 
   const getRoleLabel = (user) => {
@@ -240,7 +259,7 @@ function UserManagementPage() {
           {message.text ? <p className={`status-message ${message.type}`}>{message.text}</p> : null}
 
           {loading ? (
-            <p className="subtext">Loading users...</p>
+            <TableLoader label="Loading users..." />
           ) : usersRows.length === 0 ? (
             <p className="subtext text-center">No users match your search.</p>
           ) : (
@@ -248,13 +267,14 @@ function UserManagementPage() {
               <table className="data-table user-table">
                 <thead>
                   <tr>
-                    <th>S.No.</th>
-                    <th>User</th>
-                    <th>Contact</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Created</th>
-                    {canManageUsers ? <th>Actions</th> : null}
+                    <SortableHeader column="serial" label="S.No." sort={sort} onSort={requestSort} />
+                    <SortableHeader column="user" label="User" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="contact" label="Contact" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="city" label="City" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="state" label="State" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="role" label="Role" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="created" label="Created" sort={sort} onSort={requestSort} />
+                    <th className='text-center'>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -273,9 +293,13 @@ function UserManagementPage() {
                           <span>{user.email || 'No email'}</span>
                         </div>
                       </td>
+                      <td>{user.city || '—'}</td>
+                      <td>{user.state || '—'}</td>
                       <td><span className="role-badge">{getRoleLabel(user)}</span></td>
-                      <td>
-                        {canManageUsers ? (
+                      <td>{formatDate(user.created_at)}</td>
+                      <td className="actions-cell">
+                        <div className="action-btn-group user-action-group">
+                          {canUpdateUsers ? (
                           <button
                             type="button"
                             role="switch"
@@ -291,18 +315,18 @@ function UserManagementPage() {
                         ) : (
                           <span className={`status-badge ${getStatusLabel(user.status).toLowerCase()}`}>{getStatusLabel(user.status)}</span>
                         )}
-                      </td>
-                      <td>{formatDate(user.created_at)}</td>
-                      {canManageUsers ? <td className="actions-cell">
-                        <div className="action-btn-group">
-                          <Link className="mini-btn edit-btn" to={`/admin/users/${user.id}/edit`}>
-                            Update
-                          </Link>
-                          <button type="button" className="mini-btn delete-btn" onClick={() => handleDelete(user.id)}>
-                            Delete
-                          </button>
+                          {canUpdateUsers ? (
+                            <Link className="mini-btn edit-btn icon-action-btn" to={`/admin/users/${user.id}/edit`} aria-label={`Update ${user.name || 'user'}`} title="Update user">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
+                            </Link>
+                          ) : null}
+                          {canDeleteUsers ? (
+                            <button type="button" className="mini-btn delete-btn icon-action-btn" onClick={() => handleDelete(user.id)} aria-label={`Delete ${user.name || 'user'}`} title="Delete user">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 10v6M14 10v6" /></svg>
+                            </button>
+                          ) : null}
                         </div>
-                      </td> : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

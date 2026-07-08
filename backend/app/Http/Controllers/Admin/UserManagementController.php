@@ -24,7 +24,7 @@ class UserManagementController extends Controller
         $this->ensureAdminOrPermission($request, 'users', 'view');
 
         $users = User::with(['roleRelation', 'subAdminRole'])
-            ->select('id', 'name', 'email', 'phone_no', 'profile_image', 'role', 'role_id', 'sub_role_id', 'status', 'created_at')
+            ->select('id', 'name', 'email', 'phone_no', 'city', 'state', 'profile_image', 'role', 'role_id', 'sub_role_id', 'status', 'created_at')
             ->where('id', '!=', $request->user()->id)
             ->when(! $this->isFullAdmin($request->user()), fn ($query) => $query->where(function ($roleQuery) {
                 $roleQuery->where('role_id', 3)->orWhere('role', 'user');
@@ -37,6 +37,8 @@ class UserManagementController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'phone_no' => $user->phone_no,
+                    'city' => $user->city,
+                    'state' => $user->state,
                     'profile_image' => $user->profile_image,
                     'role_id' => $user->role_id,
                     'role' => $user->role,
@@ -58,7 +60,9 @@ class UserManagementController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'unique:users,email'],
-            'phone_no' => ['nullable', 'string', 'max:20'],
+            'phone_no' => ['nullable', 'regex:/^[0-9]{1,15}$/'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'state' => ['nullable', 'string', 'max:255'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'profile_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'role_id' => ['nullable', 'integer', 'exists:roles,id'],
@@ -80,6 +84,8 @@ class UserManagementController extends Controller
             'name' => $validated['name'],
             'email' => $validated['email'],
             'phone_no' => $validated['phone_no'] ?? null,
+            'city' => $validated['city'] ?? null,
+            'state' => $validated['state'] ?? null,
             'profile_image' => $profilePath,
             'role' => $roleName,
             'role_id' => $roleId,
@@ -95,6 +101,8 @@ class UserManagementController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone_no' => $user->phone_no,
+                'city' => $user->city,
+                'state' => $user->state,
                 'profile_image' => $user->profile_image,
                 'role_id' => $user->role_id,
                 'role' => $user->role,
@@ -112,7 +120,9 @@ class UserManagementController extends Controller
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'unique:users,email,' . $user->id],
-            'phone_no' => ['nullable', 'string', 'max:20'],
+            'phone_no' => ['nullable', 'regex:/^[0-9]{1,15}$/'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'state' => ['nullable', 'string', 'max:255'],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'profile_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'role_id' => ['nullable', 'integer', 'exists:roles,id'],

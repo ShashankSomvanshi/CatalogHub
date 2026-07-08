@@ -25,6 +25,15 @@ export function isFullAdmin(admin = getStoredAdmin()) {
   return admin?.role === 'admin' || Number(admin?.role_id) === 1
 }
 
+export function formatRoleLabel(role) {
+  if (!role) return 'Administrator'
+
+  return String(role)
+    .trim()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
 export function hasPermission(module, action = 'view', admin = getStoredAdmin()) {
   if (isFullAdmin(admin)) return true
 
@@ -79,8 +88,8 @@ export async function fetchRoleModulePermissions(subAdminRoleId) {
   return response.data
 }
 
-export async function updateRoleModulePermissions(subAdminRoleId, moduleIds) {
-  const response = await api.put(`/api/admin/sub-admin-roles/${subAdminRoleId}/permissions`, { module_ids: moduleIds })
+export async function updateRoleModulePermissions(subAdminRoleId, permissions) {
+  const response = await api.put(`/api/admin/sub-admin-roles/${subAdminRoleId}/permissions`, { permissions })
 
   return response.data
 }

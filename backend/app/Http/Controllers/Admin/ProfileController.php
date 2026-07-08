@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules\Password;
 
 class ProfileController extends Controller
 {
@@ -21,7 +22,13 @@ class ProfileController extends Controller
             'phone_no' => ['nullable', 'string', 'max:20'],
             'profile_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'current_password' => ['nullable', 'required_with:password', 'string'],
-            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'password' => [
+                'nullable',
+                'required_with:current_password,password_confirmation',
+                'confirmed',
+                Password::min(8)->mixedCase()->numbers()->symbols(),
+            ],
+            'password_confirmation' => ['nullable', 'required_with:password', 'string'],
         ]);
 
         $user = $request->user();

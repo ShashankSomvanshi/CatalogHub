@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchRoleModulePermissions, updateRoleModulePermissions } from '../../api/access.js'
 import { showSuccess } from '../../utils/alerts.js'
+import SortableHeader from './SortableHeader.jsx'
+import useSortableRows from './useSortableRows.js'
+import TableLoader from './TableLoader.jsx'
 
 function SubAdminPermissionPage() {
   const { subAdminRoleId } = useParams()
@@ -10,6 +13,13 @@ function SubAdminPermissionPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
+  const { sortedRows, sort, requestSort } = useSortableRows(modules, {
+    module: (module) => module.module_name,
+    view: (module) => Number(Boolean(module.can_view)),
+    create: (module) => Number(Boolean(module.can_create)),
+    update: (module) => Number(Boolean(module.can_update)),
+    delete: (module) => Number(Boolean(module.can_delete)),
+  }, 'module')
 
   useEffect(() => {
     let ignore = false
@@ -33,8 +43,8 @@ function SubAdminPermissionPage() {
     }
   }, [subAdminRoleId])
 
-  const setModuleSelected = (moduleId, selected) => {
-    setModules((current) => current.map((module) => module.id === moduleId ? { ...module, selected } : module))
+  const setPermission = (moduleId, key, value) => {
+    setModules((current) => current.map((module) => module.id === moduleId ? { ...module, [key]: value } : module))
   }
 
   const handleSubmit = async (event) => {
@@ -43,8 +53,15 @@ function SubAdminPermissionPage() {
     setMessage({ type: '', text: '' })
 
     try {
-      const moduleIds = modules.filter((module) => module.selected).map((module) => module.id)
-      const data = await updateRoleModulePermissions(subAdminRoleId, moduleIds)
+      const permissions = modules.map((module) => ({
+        module_id: module.id,
+        can_view: Boolean(module.can_view),
+        can_create: Boolean(module.can_create),
+        can_update: Boolean(module.can_update),
+        can_delete: Boolean(module.can_delete),
+      }))
+
+      const data = await updateRoleModulePermissions(subAdminRoleId, permissions)
       setModules(data.modules || modules)
       await showSuccess(data.message || 'Role permissions updated successfully')
     } catch (error) {
@@ -65,15 +82,26 @@ function SubAdminPermissionPage() {
 
           {message.text ? <p className={`status-message ${message.type}`}>{message.text}</p> : null}
 
-          {loading ? <p className="subtext">Loading modules...</p> : (
+          {loading ? <TableLoader label="Loading permission modules..." /> : (
             <form onSubmit={handleSubmit}>
-              <div className="table-wrap">
+              <div className="table-wrap permission-table-wrap">
                 <table className="data-table permission-table">
-                  <thead><tr><th>Module</th><th>Access</th></tr></thead>
-                  <tbody>{modules.map((module) => (
+                  <thead>
+                    <tr>
+                      <SortableHeader column="module" label="Module" sort={sort} onSort={requestSort} />
+                      <SortableHeader column="view" label="View" sort={sort} onSort={requestSort} />
+                      <SortableHeader column="create" label="Create" sort={sort} onSort={requestSort} />
+                      <SortableHeader column="update" label="Update" sort={sort} onSort={requestSort} />
+                      <SortableHeader column="delete" label="Delete" sort={sort} onSort={requestSort} />
+                    </tr>
+                  </thead>
+                  <tbody>{sortedRows.map((module) => (
                     <tr key={module.id}>
                       <td><strong>{module.module_name}</strong></td>
-                      <td><input type="checkbox" checked={Boolean(module.selected)} onChange={(event) => setModuleSelected(module.id, event.target.checked)} /></td>
+                      <td><input type="checkbox" checked={Boolean(module.can_view)} onChange={(event) => setPermission(module.id, 'can_view', event.target.checked)} /></td>
+                      <td><input type="checkbox" checked={Boolean(module.can_create)} onChange={(event) => setPermission(module.id, 'can_create', event.target.checked)} /></td>
+                      <td><input type="checkbox" checked={Boolean(module.can_update)} onChange={(event) => setPermission(module.id, 'can_update', event.target.checked)} /></td>
+                      <td><input type="checkbox" checked={Boolean(module.can_delete)} onChange={(event) => setPermission(module.id, 'can_delete', event.target.checked)} /></td>
                     </tr>
                   ))}</tbody>
                 </table>

@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { deleteSubAdmin, fetchSubAdmins } from '../../api/access.js'
 import { confirmDelete, showSuccess } from '../../utils/alerts.js'
+import SortableHeader from './SortableHeader.jsx'
+import useSortableRows from './useSortableRows.js'
+import { matchesTableSearch } from '../../utils/tableSearch.js'
+import TableLoader from './TableLoader.jsx'
 
 function SubAdminManagementPage() {
   const pageSizeOptions = [5, 10, 25]
@@ -56,24 +60,29 @@ function SubAdminManagementPage() {
   }
 
   const filteredSubAdmins = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase()
-    if (!query) return subAdmins
-
-    return subAdmins.filter((subAdmin) => (
-      String(subAdmin.id || '').toLowerCase().includes(query) ||
-      String(subAdmin.name || '').toLowerCase().includes(query) ||
-      String(subAdmin.email || '').toLowerCase().includes(query) ||
-      String(subAdmin.phone_no || '').toLowerCase().includes(query) ||
-      String(subAdmin.status || '').toLowerCase().includes(query)
-    ))
+    return subAdmins.filter((subAdmin) => matchesTableSearch([
+      subAdmin.id,
+      subAdmin.name,
+      subAdmin.email,
+      subAdmin.phone_no,
+      subAdmin.status,
+      subAdmin.sub_admin_role?.name,
+    ], searchTerm))
   }, [searchTerm, subAdmins])
 
-  const totalSubAdmins = filteredSubAdmins.length
+  const { sortedRows, sort, requestSort } = useSortableRows(filteredSubAdmins, {
+    id: (subAdmin) => Number(subAdmin.id),
+    name: (subAdmin) => subAdmin.name,
+    contact: (subAdmin) => subAdmin.email,
+    status: (subAdmin) => subAdmin.status,
+  }, 'name')
+
+  const totalSubAdmins = sortedRows.length
   const totalPages = Math.max(1, Math.ceil(totalSubAdmins / pageSize))
   const safeCurrentPage = Math.min(currentPage, totalPages)
   const startIndex = totalSubAdmins === 0 ? 0 : (safeCurrentPage - 1) * pageSize
   const endIndex = Math.min(startIndex + pageSize, totalSubAdmins)
-  const subAdminRows = filteredSubAdmins.slice(startIndex, endIndex)
+  const subAdminRows = sortedRows.slice(startIndex, endIndex)
   const getStatusLabel = (status) => status || 'active'
 
   return (
@@ -120,7 +129,7 @@ function SubAdminManagementPage() {
           {message.text ? <p className={`status-message ${message.type}`}>{message.text}</p> : null}
 
           {loading ? (
-            <p className="subtext">Loading sub admins...</p>
+            <TableLoader label="Loading sub-admins..." />
           ) : subAdminRows.length === 0 ? (
             <p className="subtext text-center">No sub admins found.</p>
           ) : (
@@ -128,10 +137,10 @@ function SubAdminManagementPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>ID</th>
-                    <th>Sub Admin</th>
-                    <th>Contact</th>
-                    <th>Status</th>
+                    <SortableHeader column="id" label="ID" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="name" label="Sub Admin" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="contact" label="Contact" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="status" label="Status" sort={sort} onSort={requestSort} />
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -149,8 +158,8 @@ function SubAdminManagementPage() {
                       <td><span className={`status-badge ${getStatusLabel(subAdmin.status).toLowerCase()}`}>{getStatusLabel(subAdmin.status)}</span></td>
                       <td className="actions-cell">
                         <div className="action-btn-group">
-                          <Link className="mini-btn edit-btn" to={`/admin/sub-admins/${subAdmin.id}/edit`}>Edit</Link>
-                          <button type="button" className="mini-btn delete-btn" onClick={() => handleDelete(subAdmin.id)}>Delete</button>
+                          <Link className="mini-btn edit-btn icon-action-btn" to={`/admin/sub-admins/${subAdmin.id}/edit`} aria-label={`Update ${subAdmin.name || 'sub admin'}`} title="Update sub admin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg></Link>
+                          <button type="button" className="mini-btn delete-btn icon-action-btn" onClick={() => handleDelete(subAdmin.id)} aria-label={`Delete ${subAdmin.name || 'sub admin'}`} title="Delete sub admin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 10v6M14 10v6" /></svg></button>
                         </div>
                       </td>
                     </tr>

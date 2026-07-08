@@ -12,6 +12,18 @@ function guestCartCount() {
 }
 
 function AllProductsPage() {
+  const getDescriptionPreview = (description) => {
+    const plainText = String(description || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    if (!plainText) return 'View this product for more information.'
+
+    return plainText.length > 120 ? `${plainText.slice(0, 117)}...` : plainText
+  }
+
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -40,7 +52,7 @@ function AllProductsPage() {
     return products.filter((product) => `${getProductName(product)} ${getProductCategoryName(product)} ${product.sku || ''}`.toLowerCase().includes(query))
   }, [products, search])
 
-  return <div className="category-products-shell all-products-shell"><PublicHeader cartCount={cartCount} /><main className="category-products-main"><div className="category-products-breadcrumb"><Link to="/">Home</Link><span>/</span><span>All Products</span></div><section className="category-products-heading all-products-heading"><div><p className="public-kicker">Complete catalog</p><h3>All Products</h3><p>Browse every active product available on CatalogHub.</p></div>{!loading && !error && <strong>{filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}</strong>}</section><div className="all-products-tools"><label>Search products<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by product, category or SKU" /></label></div>{loading ? <div className="public-product-grid">{[1, 2, 3, 4].map((item) => <article className="public-product-card public-product-skeleton" key={item} />)}</div> : error ? <section className="category-products-empty"><h2>Products unavailable</h2><p>{error}</p><Link to="/">Back to home</Link></section> : filteredProducts.length ? <div className="public-product-grid">{filteredProducts.map((product) => <article className="public-product-card" key={product.id}><div className="public-product-image">{getProductImage(product) ? <Link to={`/products/${product.id}`}><img src={getProductImage(product)} alt={getProductName(product)} /></Link> : <span>No image available</span>}</div><div className="public-product-info"><span>{getProductCategoryName(product)} | SKU: {product.sku || 'N/A'}</span><h3><Link to={`/products/${product.id}`}>{getProductName(product)}</Link></h3><p>{product.description || 'View this product for more information.'}</p><div><strong>{formatProductPrice(product.price)}</strong><Link to={`/products/${product.id}`}>View details</Link></div></div></article>)}</div> : <section className="category-products-empty"><h2>No products found</h2><p>Try a different search term.</p></section>}</main><footer className="product-detail-footer"><span>CatalogHub</span><p>Explore the complete catalog.</p><span>&copy; 2026 CatalogHub</span></footer></div>
+  return <div className="category-products-shell all-products-shell"><PublicHeader cartCount={cartCount} /><main className="category-products-main"><div className="category-products-breadcrumb"><Link to="/">Home</Link><span>/</span><span>All Products</span></div><section className="category-products-heading all-products-heading"><div><p className="public-kicker">Complete catalog</p><h3>All Products</h3><p>Browse every active product available on CatalogHub.</p></div>{!loading && !error && <strong>{filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}</strong>}</section><div className="all-products-tools"><label>Search products<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by product, category or SKU" /></label></div>{loading ? <div className="public-product-grid">{[1, 2, 3, 4].map((item) => <article className="public-product-card public-product-skeleton" key={item} />)}</div> : error ? <section className="category-products-empty"><h2>Products unavailable</h2><p>{error}</p><Link to="/">Back to home</Link></section> : filteredProducts.length ? <div className="public-product-grid">{filteredProducts.map((product) => <article className="public-product-card" key={product.id}><div className="public-product-image">{getProductImage(product) ? <Link to={`/products/${product.id}`}><img src={getProductImage(product)} alt={getProductName(product)} /></Link> : <span>No image available</span>}</div><div className="public-product-info"><span>{getProductCategoryName(product)} | SKU: {product.sku || 'N/A'}</span><h3><Link to={`/products/${product.id}`}>{getProductName(product)}</Link></h3><p>{getDescriptionPreview(product.description)}</p><div><strong>{formatProductPrice(product.price)}</strong><Link to={`/products/${product.id}`}>View details</Link></div></div></article>)}</div> : <section className="category-products-empty"><h2>No products found</h2><p>Try a different search term.</p></section>}</main><footer className="product-detail-footer"><span>CatalogHub</span><p>Explore the complete catalog.</p><span>&copy; 2026 CatalogHub</span></footer></div>
 }
 
 export default AllProductsPage

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchTransactions } from '../../api/transactions.js'
+import SortableHeader from './SortableHeader.jsx'
+import useSortableRows from './useSortableRows.js'
+import { matchesTableSearch } from '../../utils/tableSearch.js'
+import TableLoader from './TableLoader.jsx'
 
 const pageSizeOptions = [5, 10, 25]
 
@@ -31,25 +35,36 @@ function TransactionManagementPage() {
   }, [])
 
   const filteredTransactions = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase()
     return transactions.filter((transaction) => {
       const matchesStatus = status === 'all' || transaction.status === status
-      const matchesSearch = !query || [
+      const matchesSearch = matchesTableSearch([
         transaction.id,
         transaction.transaction_number,
         transaction.order_id,
         transaction.order?.order_number,
         transaction.order?.customer_name,
         transaction.order?.customer_email,
-      ].some((value) => String(value || '').toLowerCase().includes(query))
+        transaction.amount,
+        transaction.status,
+        transaction.order?.created_at || transaction.created_at,
+      ], searchTerm)
       return matchesStatus && matchesSearch
     })
   }, [transactions, searchTerm, status])
 
-  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / pageSize))
+  const { sortedRows, sort, requestSort } = useSortableRows(filteredTransactions, {
+    id: (transaction) => Number(transaction.id),
+    order: (transaction) => transaction.order?.order_number || transaction.order_id,
+    date: (transaction) => new Date(transaction.order?.created_at || transaction.created_at).getTime(),
+    customer: (transaction) => transaction.order?.customer_name,
+    price: (transaction) => Number(transaction.amount),
+    status: (transaction) => transaction.status,
+  }, 'date')
+
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize))
   const safePage = Math.min(currentPage, totalPages)
-  const startIndex = filteredTransactions.length ? (safePage - 1) * pageSize : 0
-  const rows = filteredTransactions.slice(startIndex, startIndex + pageSize)
+  const startIndex = sortedRows.length ? (safePage - 1) * pageSize : 0
+  const rows = sortedRows.slice(startIndex, startIndex + pageSize)
 
   return (
     <section className="dashboard-main-content admin-main-content">
@@ -65,10 +80,10 @@ function TransactionManagementPage() {
           </div>
 
           {message && <p className="status-message error">{message}</p>}
-          {loading ? <p className="subtext">Loading transactions...</p> : rows.length === 0 ? <p className="subtext text-center">No transactions found.</p> : (
+          {loading ? <TableLoader label="Loading transactions..." /> : rows.length === 0 ? <p className="subtext text-center">No transactions found.</p> : (
             <div className="table-wrap">
               <table className="data-table transaction-table">
-                <thead><tr><th>ID</th><th>Order ID</th><th>Order Date</th><th>Customer Name</th><th>Price</th><th>Status</th><th>Action</th></tr></thead>
+                <thead><tr><SortableHeader column="id" label="ID" sort={sort} onSort={requestSort} /><SortableHeader column="order" label="Order ID" sort={sort} onSort={requestSort} /><SortableHeader column="date" label="Order Date" sort={sort} onSort={requestSort} /><SortableHeader column="customer" label="Customer Name" sort={sort} onSort={requestSort} /><SortableHeader column="price" label="Price" sort={sort} onSort={requestSort} /><SortableHeader column="status" label="Status" sort={sort} onSort={requestSort} /><th>Action</th></tr></thead>
                 <tbody>{rows.map((transaction, rowIndex) => (
                   <tr key={transaction.id}>
                     <td className="id-cell">{startIndex + rowIndex + 1}</td>
@@ -77,7 +92,11 @@ function TransactionManagementPage() {
                     <td><strong>{transaction.order?.customer_name || 'Guest customer'}</strong></td>
                     <td>{formatMoney(transaction.amount, transaction.currency)}</td>
                     <td><span className={`status-badge ${transaction.status}`}>{transaction.status}</span></td>
-                    <td className="actions-cell"><Link className="mini-btn edit-btn" to={`/admin/transactions/${transaction.id}`}>View</Link></td>
+                    <td className="actions-cell">
+                      <Link className="mini-btn edit-btn icon-action-btn" to={`/admin/transactions/${transaction.id}`} aria-label={`View transaction ${transaction.order?.order_number || transaction.id}`} title="View transaction">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+                      </Link>
+                    </td>
                   </tr>
                 ))}</tbody>
               </table>

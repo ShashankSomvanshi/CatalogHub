@@ -2,11 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api/client.js'
 import { fetchCategories } from '../../api/categories.js'
-import { isFullAdmin } from '../../api/access.js'
+import { hasPermission } from '../../api/access.js'
 import { confirmDelete, showSuccess } from '../../utils/alerts.js'
+import SortableHeader from './SortableHeader.jsx'
+import useSortableRows from './useSortableRows.js'
+import { matchesTableSearch } from '../../utils/tableSearch.js'
+import TableLoader from './TableLoader.jsx'
 
 function CategoryManagementPage() {
-  const canManageCategories = isFullAdmin()
+  const storedAdmin = JSON.parse(localStorage.getItem('auth_user') || '{}')
+  const canUpdateCategories = hasPermission('categories', 'update', storedAdmin)
+  const canDeleteCategories = hasPermission('categories', 'delete', storedAdmin)
   const pageSizeOptions = [5, 10, 25]
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
@@ -81,25 +87,29 @@ function CategoryManagementPage() {
   }
 
   const filteredCategories = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase()
-    if (!query) return categories
-
-    return categories.filter((category) => (
-      String(category.id || '').toLowerCase().includes(query) ||
-      String(category.name || category.category_name || '').toLowerCase().includes(query) ||
-      String(category.status || '').toLowerCase().includes(query)
-    ))
+    return categories.filter((category) => matchesTableSearch([
+      category.id,
+      category.name || category.category_name,
+      category.status,
+      category.created_at,
+    ], searchTerm))
   }, [categories, searchTerm])
 
-  const totalCategories = filteredCategories.length
+  const { sortedRows, sort, requestSort } = useSortableRows(filteredCategories, {
+    id: (category) => Number(category.id),
+    name: (category) => category.name || category.category_name,
+    created: (category) => new Date(category.created_at).getTime(),
+  }, 'name')
+
+  const totalCategories = sortedRows.length
   const totalPages = Math.max(1, Math.ceil(totalCategories / pageSize))
   const safeCurrentPage = Math.min(currentPage, totalPages)
   const startIndex = totalCategories === 0 ? 0 : (safeCurrentPage - 1) * pageSize
   const endIndex = Math.min(startIndex + pageSize, totalCategories)
 
   const categoryRows = useMemo(
-    () => filteredCategories.slice(startIndex, endIndex),
-    [endIndex, filteredCategories, startIndex],
+    () => sortedRows.slice(startIndex, endIndex),
+    [endIndex, sortedRows, startIndex],
   )
 
   const getCategoryName = (category) => category.name || category.category_name || 'Unnamed category'
@@ -157,7 +167,7 @@ function CategoryManagementPage() {
           {message.text ? <p className={`status-message ${message.type}`}>{message.text}</p> : null}
 
           {loading ? (
-            <p className="subtext">Loading categories...</p>
+            <TableLoader label="Loading categories..." />
           ) : categoryRows.length === 0 ? (
             <p className="subtext text-center">No categories found.</p>
           ) : (
@@ -165,11 +175,10 @@ function CategoryManagementPage() {
               <table className="data-table category-table">
                 <thead>
                   <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Created</th>
-                    <th>Status</th>
-                    {canManageCategories ? <th>Actions</th> : null}
+                    <SortableHeader column="id" label="ID" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="name" label="Name" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="created" label="Created" sort={sort} onSort={requestSort} />
+                    {canUpdateCategories || canDeleteCategories ? <th>Actions</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -185,21 +194,25 @@ function CategoryManagementPage() {
                         </div>
                       </td>
                       <td>{formatDate(category.created_at)}</td>
-                      <td>
-                        {canManageCategories ? (
-                          <button type="button" role="switch" aria-checked={getStatusLabel(category.status) === 'active'} aria-label={`Mark ${getCategoryName(category)} as ${getStatusLabel(category.status) === 'active' ? 'inactive' : 'active'}`} className={`status-toggle ${getStatusLabel(category.status) === 'active' ? 'active' : ''}`} disabled={updatingStatusId === category.id} onClick={() => handleStatusToggle(category)}>
-                            <span className="status-toggle-track"><span className="status-toggle-knob" /></span><span>{getStatusLabel(category.status)}</span>
-                          </button>
-                        ) : <span className={`status-badge ${getStatusLabel(category.status).toLowerCase()}`}>{getStatusLabel(category.status)}</span>}
-                      </td>
-                      {canManageCategories ? <td className="actions-cell">
-                        <div className="action-btn-group">
-                          <Link className="mini-btn edit-btn" to={`/admin/categories/${category.id}/edit`}>
-                            Edit
-                          </Link>
-                          <button type="button" className="mini-btn delete-btn" onClick={() => handleDelete(category.id)}>
-                            Delete
-                          </button>
+                      {(canUpdateCategories || canDeleteCategories) ? <td className="actions-cell">
+                        <div className="action-btn-group user-action-group category-action-group">
+                          {canUpdateCategories ? (
+                            <button type="button" role="switch" aria-checked={getStatusLabel(category.status) === 'active'} aria-label={`Mark ${getCategoryName(category)} as ${getStatusLabel(category.status) === 'active' ? 'inactive' : 'active'}`} className={`status-toggle ${getStatusLabel(category.status) === 'active' ? 'active' : ''}`} disabled={updatingStatusId === category.id} onClick={() => handleStatusToggle(category)}>
+                              <span className="status-toggle-track"><span className="status-toggle-knob" /></span><span>{getStatusLabel(category.status)}</span>
+                            </button>
+                          ) : (
+                            <span className={`status-badge ${getStatusLabel(category.status).toLowerCase()}`}>{getStatusLabel(category.status)}</span>
+                          )}
+                          {canUpdateCategories ? (
+                            <Link className="mini-btn edit-btn icon-action-btn" to={`/admin/categories/${category.id}/edit`} aria-label={`Update ${getCategoryName(category)}`} title="Update category">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
+                            </Link>
+                          ) : null}
+                          {canDeleteCategories ? (
+                            <button type="button" className="mini-btn delete-btn icon-action-btn" onClick={() => handleDelete(category.id)} aria-label={`Delete ${getCategoryName(category)}`} title="Delete category">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 10v6M14 10v6" /></svg>
+                            </button>
+                          ) : null}
                         </div>
                       </td> : null}
                     </tr>

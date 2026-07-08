@@ -37,7 +37,7 @@ class RoleController extends Controller
 
     public function showSubAdminRole(Request $request, SubAdminRole $subAdminRole): JsonResponse
     {
-        $this->ensureFullAdmin($request);
+        $this->ensureAdminOrPermission($request, 'role_management', 'view');
 
         return response()->json([
             'sub_admin_role' => $subAdminRole->load('modules:id,module_name'),
@@ -46,7 +46,7 @@ class RoleController extends Controller
 
     public function storeSubAdminRole(Request $request): JsonResponse
     {
-        $this->ensureFullAdmin($request);
+        $this->ensureAdminOrPermission($request, 'role_management', 'create');
         $request->merge(['name' => trim((string) $request->input('name'))]);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:sub_role_admin,name'],
@@ -62,7 +62,7 @@ class RoleController extends Controller
 
     public function updateSubAdminRole(Request $request, SubAdminRole $subAdminRole): JsonResponse
     {
-        $this->ensureFullAdmin($request);
+        $this->ensureAdminOrPermission($request, 'role_management', 'update');
         $request->merge(['name' => trim((string) $request->input('name'))]);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('sub_role_admin', 'name')->ignore($subAdminRole->id)],
@@ -78,7 +78,7 @@ class RoleController extends Controller
 
     public function destroySubAdminRole(Request $request, SubAdminRole $subAdminRole): JsonResponse
     {
-        $this->ensureFullAdmin($request);
+        $this->ensureAdminOrPermission($request, 'role_management', 'delete');
 
         if ($subAdminRole->users()->exists()) {
             return response()->json([

@@ -13,6 +13,18 @@ function getCartCount() {
 }
 
 function CategoryProductsPage() {
+  const getDescriptionPreview = (description) => {
+    const plainText = String(description || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    if (!plainText) return 'View this product for more information.'
+
+    return plainText.length > 120 ? `${plainText.slice(0, 117)}...` : plainText
+  }
+
   const { categoryId } = useParams()
   const [category, setCategory] = useState(null)
   const [products, setProducts] = useState([])
@@ -62,7 +74,7 @@ function CategoryProductsPage() {
         ) : error ? (
           <section className="category-products-empty"><h2>Category unavailable</h2><p>{error}</p><Link to="/">Back to home</Link></section>
         ) : products.length ? (
-          <div className="public-product-grid">{products.map((product) => <article className="public-product-card" key={product.id}><div className="public-product-image">{getProductImage(product) ? <Link to={`/products/${product.id}`}><img src={getProductImage(product)} alt={getProductName(product)} /></Link> : <span>No image available</span>}</div><div className="public-product-info"><span>SKU: {product.sku || 'N/A'}</span><h3><Link to={`/products/${product.id}`}>{getProductName(product)}</Link></h3><p>{product.description || 'View this product for more information.'}</p><div><strong>{formatProductPrice(product.price)}</strong><Link to={`/products/${product.id}`}>View details</Link></div></div></article>)}</div>
+          <div className="public-product-grid">{products.map((product) => <article className="public-product-card" key={product.id}><div className="public-product-image">{getProductImage(product) ? <Link to={`/products/${product.id}`}><img src={getProductImage(product)} alt={getProductName(product)} /></Link> : <span>No image available</span>}</div><div className="public-product-info"><span>SKU: {product.sku || 'N/A'}</span><h3><Link to={`/products/${product.id}`}>{getProductName(product)}</Link></h3><p>{getDescriptionPreview(product.description)}</p><div><strong>{formatProductPrice(product.price)}</strong><Link to={`/products/${product.id}`}>View details</Link></div></div></article>)}</div>
         ) : (
           <section className="category-products-empty"><h2>No products found</h2><p>There are currently no active products in {categoryName}.</p><Link to="/">Browse other categories</Link></section>
         )}

@@ -141,7 +141,12 @@ export function persistTokenPayload(payload) {
   }
 
   if (user) {
-    localStorage.setItem('auth_user', JSON.stringify(user))
+    const storedUser = (() => {
+      try { return JSON.parse(localStorage.getItem('auth_user') || '{}') }
+      catch { return {} }
+    })()
+    localStorage.setItem('auth_user', JSON.stringify({ ...storedUser, ...user }))
+    window.dispatchEvent(new CustomEvent('auth-user-updated', { detail: { ...storedUser, ...user } }))
   }
 }
 

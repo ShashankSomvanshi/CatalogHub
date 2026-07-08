@@ -89,6 +89,7 @@ function ProductDetailPage() {
   }
 
   const imageUrl = product ? getProductImage(product) : ''
+  const productDescription = product?.description?.trim()
 
   return (
     <div className="product-detail-shell">
@@ -112,7 +113,14 @@ function ProductDetailPage() {
               <h1>{getProductName(product)}</h1>
               <p className="product-detail-sku">SKU: <strong>{product.sku || 'Not available'}</strong></p>
               <p className="product-detail-price">{formatProductPrice(product.price)}</p>
-              <div className="product-detail-description"><h2>Description</h2><p>{product.description || 'No description is available for this product.'}</p></div>
+              <div className="product-detail-description">
+                <h2>Description</h2>
+                {productDescription ? (
+                  <div dangerouslySetInnerHTML={{ __html: productDescription }} />
+                ) : (
+                  <p>No description is available for this product.</p>
+                )}
+              </div>
               <div className="product-detail-actions">
                 <button type="button" className="product-add-cart" onClick={() => addToCart()}>Add to Cart</button>
                 <button type="button" className="product-buy-now" onClick={handleBuyNow}>Buy Now</button>

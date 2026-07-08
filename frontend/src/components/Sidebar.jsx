@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { formatRoleLabel } from '../api/access.js'
+import shopNowLogo from '../assets/images/shop_now.jpeg'
 
 function SidebarIcon({ item }) {
   const paths = {
@@ -20,6 +22,7 @@ function Sidebar({ adminName, adminRole, menuItems, title = 'Admin Panel', subti
   const navigate = useNavigate()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('admin_sidebar_collapsed') === 'true')
+  const roleLabel = formatRoleLabel(adminRole)
 
   useEffect(() => {
     document.documentElement.dataset.adminSidebar = collapsed ? 'collapsed' : 'expanded'
@@ -89,7 +92,7 @@ function Sidebar({ adminName, adminRole, menuItems, title = 'Admin Panel', subti
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-heading">
         <div className="sidebar-heading-copy">
-          <p className="sidebar-brand"><span>CatalogHub</span><b>CH</b></p>
+          <p className="sidebar-brand"><img className="sidebar-brand-logo" src={shopNowLogo} alt="ShopNow" /></p>
           <h2>{title}</h2>
           <p className="sidebar-subtitle">{subtitle}</p>
         </div>
@@ -115,7 +118,7 @@ function Sidebar({ adminName, adminRole, menuItems, title = 'Admin Panel', subti
 
       <div className="sidebar-footer">
         <b className="sidebar-footer-avatar">{(adminName || 'A').slice(0, 1).toUpperCase()}</b>
-        <div><strong>Hello {adminName}</strong><span>{adminRole || 'Administrator'}</span></div>
+        <div><strong>Hello {adminName}</strong><span>{roleLabel}</span></div>
       </div>
     </aside>
   )

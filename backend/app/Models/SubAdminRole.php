@@ -24,6 +24,6 @@ class SubAdminRole extends Model
             'module_permission',
             'sub_role_admin_id',
             'module_id'
-        );
+        )->withPivot(['can_view', 'can_create', 'can_update', 'can_delete']);
     }
 }

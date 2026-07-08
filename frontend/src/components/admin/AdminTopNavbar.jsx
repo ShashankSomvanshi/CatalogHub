@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getProfileImageUrl } from '../../api/profile.js'
+import { formatRoleLabel } from '../../api/access.js'
 
 function getStoredProfileImage() {
   try {
@@ -27,6 +28,7 @@ function AdminTopNavbar({ adminName, adminRole, onLogout, actionButton }) {
     .slice(0, 2)
     .toUpperCase()
   const profileImageUrl = getProfileImageUrl(profileImage)
+  const roleLabel = formatRoleLabel(adminRole)
 
   useEffect(() => {
     document.documentElement.dataset.adminTheme = theme
@@ -69,7 +71,7 @@ function AdminTopNavbar({ adminName, adminRole, onLogout, actionButton }) {
       <div>
         <p className="eyebrow">Admin overview</p>
         <h1>Welcome, {adminName}</h1>
-        <p className="subtext">{adminRole || 'Administrator'}</p>
+        <p className="subtext">{roleLabel}</p>
       </div>
 
       <div className="topbar-actions">
@@ -109,7 +111,7 @@ function AdminTopNavbar({ adminName, adminRole, onLogout, actionButton }) {
             )}
             <span className="profile-meta">
               <strong>{adminName}</strong>
-              <small>{adminRole || 'Administrator'}</small>
+              <small>{roleLabel}</small>
             </span>
             <span className={`caret ${menuOpen ? 'open' : ''}`}>⌄</span>
           </button>

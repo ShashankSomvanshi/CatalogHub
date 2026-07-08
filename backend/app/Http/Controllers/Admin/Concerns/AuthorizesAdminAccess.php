@@ -33,18 +33,26 @@ trait AuthorizesAdminAccess
             abort(403, 'Only admin or permitted sub admin can access this module.');
         }
 
-        if ($action !== 'view') {
-            abort(403, 'Sub admins currently have view-only access.');
-        }
-
         $moduleId = self::MODULE_IDS[$module] ?? null;
         $hasPermission = $moduleId
             && $user->subAdminRole
-            && $user->subAdminRole->modules()->where('modules.id', $moduleId)->exists();
+            && $this->subAdminRoleHasPermission($user->subAdminRole, $moduleId, $action);
 
         if (! $hasPermission) {
-            abort(403, 'You do not have permission for this module.');
+            abort(403, 'You do not have permission for this action.');
         }
+    }
+
+    private function subAdminRoleHasPermission($subAdminRole, int $moduleId, string $action): bool
+    {
+        if (! in_array($action, ['view', 'create', 'update', 'delete'], true)) {
+            $action = 'view';
+        }
+
+        return $subAdminRole->modules()
+            ->where('modules.id', $moduleId)
+            ->where("module_permission.can_{$action}", true)
+            ->exists();
     }
 
     protected function isFullAdmin(mixed $user): bool

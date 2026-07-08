@@ -2,11 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api/client.js'
 import { fetchProducts, getProductCategoryName, getProductImage, getProductName } from '../../api/products.js'
-import { isFullAdmin } from '../../api/access.js'
+import { hasPermission } from '../../api/access.js'
 import { confirmDelete, showSuccess } from '../../utils/alerts.js'
+import SortableHeader from './SortableHeader.jsx'
+import useSortableRows from './useSortableRows.js'
+import { matchesTableSearch } from '../../utils/tableSearch.js'
+import TableLoader from './TableLoader.jsx'
 
 function ProductManagementPage() {
-  const canManageProducts = isFullAdmin()
+  const storedAdmin = JSON.parse(localStorage.getItem('auth_user') || '{}')
+  const canUpdateProducts = hasPermission('products', 'update', storedAdmin)
+  const canDeleteProducts = hasPermission('products', 'delete', storedAdmin)
   const pageSizeOptions = [5, 10, 25]
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -81,24 +87,32 @@ function ProductManagementPage() {
   }
 
   const filteredProducts = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase()
-    if (!query) return products
-
-    return products.filter((product) => (
-      String(product.id || '').toLowerCase().includes(query) ||
-      getProductName(product).toLowerCase().includes(query) ||
-      getProductCategoryName(product).toLowerCase().includes(query) ||
-      String(product.sku || '').toLowerCase().includes(query) ||
-      String(product.status || '').toLowerCase().includes(query)
-    ))
+    return products.filter((product) => matchesTableSearch([
+      product.id,
+      getProductName(product),
+      getProductCategoryName(product),
+      product.description,
+      product.price,
+      product.sku,
+      product.status,
+    ], searchTerm))
   }, [products, searchTerm])
 
-  const totalProducts = filteredProducts.length
+  const { sortedRows, sort, requestSort } = useSortableRows(filteredProducts, {
+    id: (product) => Number(product.id),
+    product: (product) => getProductName(product),
+    category: (product) => getProductCategoryName(product),
+    description: (product) => product.description,
+    price: (product) => Number(product.price),
+    sku: (product) => product.sku,
+  }, 'product')
+
+  const totalProducts = sortedRows.length
   const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize))
   const safeCurrentPage = Math.min(currentPage, totalPages)
   const startIndex = totalProducts === 0 ? 0 : (safeCurrentPage - 1) * pageSize
   const endIndex = Math.min(startIndex + pageSize, totalProducts)
-  const productRows = filteredProducts.slice(startIndex, endIndex)
+  const productRows = sortedRows.slice(startIndex, endIndex)
 
   const getStatusLabel = (status) => status || 'active'
   const handleImageError = (event) => {
@@ -110,6 +124,18 @@ function ProductManagementPage() {
     const amount = Number(price || 0)
 
     return Number.isNaN(amount) ? price : amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })
+  }
+
+  const getDescriptionPreview = (description) => {
+    const plainText = String(description || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    if (!plainText) return 'No description'
+
+    return plainText.length > 120 ? `${plainText.slice(0, 117)}...` : plainText
   }
 
   return (
@@ -155,7 +181,7 @@ function ProductManagementPage() {
           {message.text ? <p className={`status-message ${message.type}`}>{message.text}</p> : null}
 
           {loading ? (
-            <p className="subtext">Loading products...</p>
+            <TableLoader label="Loading products..." />
           ) : productRows.length === 0 ? (
             <p className="subtext text-center">No products found.</p>
           ) : (
@@ -163,15 +189,14 @@ function ProductManagementPage() {
               <table className="data-table product-table">
                 <thead>
                   <tr>
-                    <th>ID</th>
-                    <th>Product</th>
-                    <th>Category</th>
-                    <th>Description</th>
-                    <th>Price</th>
-                    <th>SKU</th>
+                    <SortableHeader column="id" label="ID" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="product" label="Product" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="category" label="Category" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="description" label="Description" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="price" label="Price" sort={sort} onSort={requestSort} />
+                    <SortableHeader column="sku" label="SKU" sort={sort} onSort={requestSort} />
                     <th>Image</th>
-                    <th>Status</th>
-                    {canManageProducts ? <th>Actions</th> : null}
+                    {(canUpdateProducts || canDeleteProducts) ? <th>Actions</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -180,7 +205,7 @@ function ProductManagementPage() {
                       <td className="id-cell">{startIndex + rowIndex + 1}</td>
                       <td><strong>{getProductName(product)}</strong></td>
                       <td>{getProductCategoryName(product)}</td>
-                      <td className="description-cell">{product.description || 'No description'}</td>
+                      <td className="description-cell">{getDescriptionPreview(product.description)}</td>
                       <td>{formatPrice(product.price)}</td>
                       <td>{product.sku || 'No SKU'}</td>
                       <td>
@@ -193,21 +218,25 @@ function ProductManagementPage() {
                           <span className="subtext">No image</span>
                         )}
                       </td>
-                      <td>
-                        {canManageProducts ? (
-                          <button type="button" role="switch" aria-checked={getStatusLabel(product.status) === 'active'} aria-label={`Mark ${getProductName(product)} as ${getStatusLabel(product.status) === 'active' ? 'inactive' : 'active'}`} className={`status-toggle ${getStatusLabel(product.status) === 'active' ? 'active' : ''}`} disabled={updatingStatusId === product.id} onClick={() => handleStatusToggle(product)}>
-                            <span className="status-toggle-track"><span className="status-toggle-knob" /></span><span>{getStatusLabel(product.status)}</span>
-                          </button>
-                        ) : <span className={`status-badge ${getStatusLabel(product.status).toLowerCase()}`}>{getStatusLabel(product.status)}</span>}
-                      </td>
-                      {canManageProducts ? <td className="actions-cell">
-                        <div className="action-btn-group">
-                          <Link className="mini-btn edit-btn" to={`/admin/products/${product.id}/edit`}>
-                            Edit
-                          </Link>
-                          <button type="button" className="mini-btn delete-btn" onClick={() => handleDelete(product.id)}>
-                            Delete
-                          </button>
+                      {(canUpdateProducts || canDeleteProducts) ? <td className="actions-cell">
+                        <div className="action-btn-group user-action-group">
+                          {canUpdateProducts ? (
+                            <button type="button" role="switch" aria-checked={getStatusLabel(product.status) === 'active'} aria-label={`Mark ${getProductName(product)} as ${getStatusLabel(product.status) === 'active' ? 'inactive' : 'active'}`} className={`status-toggle ${getStatusLabel(product.status) === 'active' ? 'active' : ''}`} disabled={updatingStatusId === product.id} onClick={() => handleStatusToggle(product)}>
+                              <span className="status-toggle-track"><span className="status-toggle-knob" /></span><span>{getStatusLabel(product.status)}</span>
+                            </button>
+                          ) : (
+                            <span className={`status-badge ${getStatusLabel(product.status).toLowerCase()}`}>{getStatusLabel(product.status)}</span>
+                          )}
+                          {canUpdateProducts ? (
+                            <Link className="mini-btn edit-btn icon-action-btn" to={`/admin/products/${product.id}/edit`} aria-label={`Update ${getProductName(product)}`} title="Update product">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
+                            </Link>
+                          ) : null}
+                          {canDeleteProducts ? (
+                            <button type="button" className="mini-btn delete-btn icon-action-btn" onClick={() => handleDelete(product.id)} aria-label={`Delete ${getProductName(product)}`} title="Delete product">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 10v6M14 10v6" /></svg>
+                            </button>
+                          ) : null}
                         </div>
                       </td> : null}
                     </tr>

@@ -27,6 +27,8 @@ class User extends Authenticatable
         'name',
         'email',
         'phone_no',
+        'city',
+        'state',
         'profile_image',
         'role',
         'role_id',
@@ -87,7 +89,10 @@ class User extends Authenticatable
             },
             'module_id' => $module->id,
             'module_name' => $module->module_name,
-            'can_view' => true,
+            'can_view' => (bool) $module->pivot->can_view,
+            'can_create' => (bool) $module->pivot->can_create,
+            'can_update' => (bool) $module->pivot->can_update,
+            'can_delete' => (bool) $module->pivot->can_delete,
         ])->values();
     }
 
