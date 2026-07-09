@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { fetchAdminProfile, getProfileImageUrl, updateAdminProfile } from '../../api/profile.js'
 import { showSuccess } from '../../utils/alerts.js'
 
 function ProfileSettingsPage() {
+  const navigate = useNavigate()
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -52,6 +54,10 @@ function ProfileSettingsPage() {
       ignore = true
     }
   }, [])
+
+  const handleCancel = () => {
+    navigate(-1)
+  }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -152,6 +158,9 @@ function ProfileSettingsPage() {
 
               <div className="form-actions">
                 <button type="submit" className="submit-btn admin-btn" disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</button>
+                <button type="button" className="ghost-btn" onClick={handleCancel}>
+                  Cancel
+                </button>
               </div>
             </form>
           )}

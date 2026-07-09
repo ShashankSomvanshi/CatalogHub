@@ -127,9 +127,9 @@ function RoleFormPage({ mode = 'add' }) {
                         <tr key={module.id}>
                           <td><strong>{module.module_name}</strong></td>
                           <td><input type="checkbox" checked={Boolean(module.can_view)} onChange={(event) => setPermission(module.id, 'can_view', event.target.checked)} /></td>
-                          <td><input type="checkbox" checked={Boolean(module.can_create)} onChange={(event) => setPermission(module.id, 'can_create', event.target.checked)} /></td>
-                          <td><input type="checkbox" checked={Boolean(module.can_update)} onChange={(event) => setPermission(module.id, 'can_update', event.target.checked)} /></td>
-                          <td><input type="checkbox" checked={Boolean(module.can_delete)} onChange={(event) => setPermission(module.id, 'can_delete', event.target.checked)} /></td>
+                          <td>{module.module_name !== 'Transaction Management' && (<input type="checkbox" checked={Boolean(module.can_create)} onChange={(event) =>setPermission(module.id, 'can_create', event.target.checked)}/>)}</td>
+                          <td>{module.module_name !== 'Transaction Management' && (<input type="checkbox" checked={Boolean(module.can_update)} onChange={(event) => setPermission(module.id, 'can_update', event.target.checked)}/>)}</td>
+                          <td>{module.module_name !== 'Transaction Management' && (<input type="checkbox" checked={Boolean(module.can_delete)} onChange={(event) => setPermission(module.id, 'can_delete', event.target.checked)}/>)}</td>
                         </tr>
                       ))}</tbody>
                     </table>

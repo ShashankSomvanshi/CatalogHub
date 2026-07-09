@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('transaction_number')->unique();
             $table->foreignId('order_id')->constrained()->restrictOnDelete();
             $table->decimal('amount', 12, 2);
-            $table->char('currency', 3)->default('INR');
+            $table->char('currency', 3)->default('USD');
             $table->string('payment_gateway')->nullable();
             $table->string('gateway_order_id')->nullable();
             $table->string('gateway_transaction_id')->nullable();

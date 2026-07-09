@@ -11,6 +11,7 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth_token')
+  config._hadAuthToken = Boolean(token)
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -31,6 +32,10 @@ api.interceptors.response.use(
       originalRequest?._retry ||
       originalRequest?.url?.includes('/api/token/refresh')
     ) {
+      return Promise.reject(error)
+    }
+
+    if (!originalRequest?._hadAuthToken) {
       return Promise.reject(error)
     }
 
@@ -152,6 +157,9 @@ export function persistTokenPayload(payload) {
 
 export function clearAuthAndRedirect() {
   const role = localStorage.getItem('auth_role')
+  const redirectPath = role === 'admin' ? '/admin' : '/login'
+  const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`
+
   localStorage.removeItem('auth_token')
   localStorage.removeItem('refresh_token')
   localStorage.removeItem('access_token_expires_at')
@@ -160,7 +168,10 @@ export function clearAuthAndRedirect() {
   localStorage.removeItem('auth_role')
 
   if (window.location.pathname !== '/login' && window.location.pathname !== '/admin') {
-    window.location.href = role === 'admin' ? '/admin' : '/login'
+    if (redirectPath === '/login') {
+      localStorage.setItem('return_to', currentPath)
+    }
+    window.location.href = redirectPath
   }
 }
 

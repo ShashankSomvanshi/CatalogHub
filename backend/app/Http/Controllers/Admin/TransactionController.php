@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Transaction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class TransactionController extends Controller
 {
@@ -64,12 +65,43 @@ class TransactionController extends Controller
     {
         $this->ensureAdminOrPermission($request, 'transactions', 'view');
 
+        $this->loadTransactionDetail($transaction);
+
+        return response()->json(['transaction' => $transaction]);
+    }
+
+    public function updateOrderStatus(Request $request, Transaction $transaction): JsonResponse
+    {
+        $this->ensureAdminOrPermission($request, 'transactions', 'update');
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(['pending', 'processing', 'shipped', 'delivered', 'cancelled'])],
+            'note' => ['required', 'string', 'max:2000'],
+        ]);
+
+        abort_if(! $transaction->order()->exists(), 404, 'Order not found for this transaction.');
+
+        $transaction->order()->update(['status' => $validated['status']]);
+        $transaction->order->statusLogs()->create([
+            'date' => now(),
+            'status' => $validated['status'],
+            'note' => $validated['note'] ?? null,
+        ]);
+        $this->loadTransactionDetail($transaction->refresh());
+
+        return response()->json([
+            'message' => 'Order status updated successfully.',
+            'transaction' => $transaction,
+        ]);
+    }
+
+    private function loadTransactionDetail(Transaction $transaction): void
+    {
         $transaction->load([
             'order:id,user_id,order_number,customer_name,customer_email,customer_phone,billing_address,billing_city,billing_state,billing_pincode,shipping_address,shipping_city,shipping_state,shipping_pincode,payment_method,payment_status,subtotal,shipping_amount,final_amount,status,created_at',
             'order.items:id,order_id,product_id,product_name,sku,unit_price,quantity,subtotal',
             'order.items.product:id,image',
+            'order.statusLogs:id,order_id,date,status,note,created_at,updated_at',
         ]);
-
-        return response()->json(['transaction' => $transaction]);
     }
 }

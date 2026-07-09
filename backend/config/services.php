@@ -39,6 +39,7 @@ return [
         'key' => env('STRIPE_KEY'),
         'secret' => env('STRIPE_SECRET'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'currency' => env('STRIPE_CURRENCY', 'USD'),
     ],
 
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),

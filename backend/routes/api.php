@@ -84,5 +84,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('admin.access:transactions')->group(function () {
         Route::get('/admin/transactions', [TransactionController::class, 'index']);
         Route::get('/admin/transactions/{transaction}', [TransactionController::class, 'show']);
+        Route::patch('/admin/transactions/{transaction}/order-status', [TransactionController::class, 'updateOrderStatus']);
     });
 });

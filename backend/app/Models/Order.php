@@ -38,4 +38,9 @@ class Order extends Model
     {
         return $this->hasMany(Transaction::class);
     }
+
+    public function statusLogs(): HasMany
+    {
+        return $this->hasMany(OrderStatusLog::class)->latest('date');
+    }
 }

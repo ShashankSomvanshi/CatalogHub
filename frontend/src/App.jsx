@@ -117,7 +117,7 @@ function CustomerRoute({ children }) {
   const hasToken = Boolean(localStorage.getItem('auth_token'))
 
   if (!hasToken) {
-    localStorage.setItem('return_to', window.location.pathname)
+    localStorage.setItem('return_to', `${window.location.pathname}${window.location.search}${window.location.hash}`)
     return <Navigate to="/login" replace />
   }
 
