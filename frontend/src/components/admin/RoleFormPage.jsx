@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { createSubAdminRole, fetchSubAdminRole, updateSubAdminRole } from '../../api/roles.js'
-import { fetchRoleModulePermissions, updateRoleModulePermissions } from '../../api/access.js'
+import { fetchRoleModulePermissions, fetchRoleModules, updateRoleModulePermissions } from '../../api/access.js'
 import { showSuccess } from '../../utils/alerts.js'
 import SortableHeader from './SortableHeader.jsx'
 import useSortableRows from './useSortableRows.js'
@@ -12,7 +12,7 @@ function RoleFormPage({ mode = 'add' }) {
   const navigate = useNavigate()
   const editing = mode === 'edit'
   const [name, setName] = useState('')
-  const [loading, setLoading] = useState(editing)
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [fieldError, setFieldError] = useState('')
@@ -26,16 +26,16 @@ function RoleFormPage({ mode = 'add' }) {
   }, 'module')
 
   useEffect(() => {
-    if (!editing) return
     let ignore = false
 
-    Promise.all([
-      fetchSubAdminRole(subAdminRoleId),
-      fetchRoleModulePermissions(subAdminRoleId),
-    ])
+    const request = editing
+      ? Promise.all([fetchSubAdminRole(subAdminRoleId), fetchRoleModulePermissions(subAdminRoleId)])
+      : Promise.all([Promise.resolve(null), fetchRoleModules()])
+
+    request
       .then(([role, permissionData]) => {
         if (!ignore) {
-          setName(role?.name || '')
+          if (editing) setName(role?.name || '')
           setModules(permissionData.modules || [])
         }
       })
@@ -68,18 +68,19 @@ function RoleFormPage({ mode = 'add' }) {
     }
 
     try {
+      const permissions = modules.map((module) => ({
+        module_id: module.id,
+        can_view: Boolean(module.can_view),
+        can_create: Boolean(module.can_create),
+        can_update: Boolean(module.can_update),
+        can_delete: Boolean(module.can_delete),
+      }))
+
       if (editing) {
         await updateSubAdminRole(subAdminRoleId, name)
-        const permissions = modules.map((module) => ({
-          module_id: module.id,
-          can_view: Boolean(module.can_view),
-          can_create: Boolean(module.can_create),
-          can_update: Boolean(module.can_update),
-          can_delete: Boolean(module.can_delete),
-        }))
         await updateRoleModulePermissions(subAdminRoleId, permissions)
       } else {
-        await createSubAdminRole(name)
+        await createSubAdminRole(name, permissions)
       }
       await showSuccess(`Role ${editing ? 'updated' : 'created'} successfully`)
       navigate('/admin/role-permissions')
@@ -100,17 +101,16 @@ function RoleFormPage({ mode = 'add' }) {
               <h3>{editing ? 'Edit Role' : 'Add Role'}</h3>
               <p className="subtext">{editing ? 'Update the sub-admin role name.' : 'Create a role, then assign its accessible modules.'}</p>
             </div>
-            <Link to="/admin/role-permissions" className="ghost-btn">Back to Roles</Link>
+            {/* <Link to="/admin/role-permissions" className="ghost-btn">Back to Roles</Link> */}
           </div>
           {message && !fieldError ? <p className="status-message error">{message}</p> : null}
           {loading ? <TableLoader label="Loading role permissions..." /> : (
             <form className="admin-record-form" onSubmit={handleSubmit} noValidate>
-              <div className="form-grid single-field-grid"><label><span className="field-label">Role name <span className="required-mark">*</span></span><input value={name} onChange={(event) => { setName(event.target.value); setFieldError('') }} placeholder="For example: Marketing Manager" aria-invalid={Boolean(fieldError)} />{fieldError && <small className="field-error">{fieldError}</small>}</label></div>
-              {editing ? (
-                <div className="role-modules-section">
+              <div className="form-grid single-field-grid"><label><span className="field-label">Role Name <span className="required-mark">*</span></span><input value={name} onChange={(event) => { setName(event.target.value); setFieldError('') }} placeholder="For example: Marketing Manager" aria-invalid={Boolean(fieldError)} />{fieldError && <small className="field-error">{fieldError}</small>}</label></div>
+              <div className="role-modules-section">
                   <div className="role-modules-head">
                     <h4>Module access</h4>
-                    <p className="subtext">Update role name and module access together on one page.</p>
+                    <p className="subtext">{editing ? 'Update role name and module access together on one page.' : 'Choose the module permissions for this role.'}</p>
                   </div>
                   <div className="table-wrap permission-table-wrap">
                     <table className="data-table permission-table">
@@ -135,7 +135,6 @@ function RoleFormPage({ mode = 'add' }) {
                     </table>
                   </div>
                 </div>
-              ) : null}
               <div className="form-actions"><button type="submit" className="submit-btn admin-btn" disabled={saving}>{saving ? 'Saving...' : editing ? 'Save' : 'Create Role'}</button><Link to="/admin/role-permissions" className="ghost-btn">Cancel</Link></div>
             </form>
           )}

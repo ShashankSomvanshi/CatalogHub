@@ -1,27 +1,37 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../../api/client.js'
 import { hasPermission } from '../../api/access.js'
 import { fetchRoles, getRoleId, getRoleName } from '../../api/roles.js'
 import { confirmDelete, showSuccess, showToast } from '../../utils/alerts.js'
 import SortableHeader from './SortableHeader.jsx'
-import useSortableRows from './useSortableRows.js'
-import { matchesTableSearch } from '../../utils/tableSearch.js'
+import useServerSort from './useServerSort.js'
 import TableLoader from './TableLoader.jsx'
 
 function UserManagementPage() {
   const storedAdmin = JSON.parse(localStorage.getItem('auth_user') || '{}')
+  const canCreateUsers = hasPermission('users', 'create', storedAdmin)
   const canUpdateUsers = hasPermission('users', 'update', storedAdmin)
   const canDeleteUsers = hasPermission('users', 'delete', storedAdmin)
   const pageSizeOptions = [5, 10, 25]
+  const [searchParams, setSearchParams] = useSearchParams()
+  const readPositiveInt = (value, fallback) => {
+    const parsed = Number.parseInt(value, 10)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+  }
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState({ type: '', text: '' })
   const [roles, setRoles] = useState([])
-  const [searchTerm, setSearchTerm] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || '')
+  const [currentPage, setCurrentPage] = useState(() => readPositiveInt(searchParams.get('page'), 1))
+  const [pageSize, setPageSize] = useState(() => {
+    const requestedSize = readPositiveInt(searchParams.get('per_page'), 10)
+    return pageSizeOptions.includes(requestedSize) ? requestedSize : 10
+  })
   const [updatingStatusId, setUpdatingStatusId] = useState(null)
+  const [meta, setMeta] = useState({ total: 0, last_page: 1, from: 0, to: 0 })
+  const { sort, requestSort } = useServerSort(searchParams.get('sort') || 'user', searchParams.get('direction') === 'desc' ? 'desc' : 'asc')
 
   const normalizeUsers = (payload) => {
     const findUserArray = (value) => {
@@ -65,12 +75,12 @@ function UserManagementPage() {
     }
 
     try {
-      const response = await api.get('/api/admin/users')
+      const response = await api.get('/api/admin/users', { params: { page: currentPage, per_page: pageSize, search: searchTerm, sort: sort.key, direction: sort.direction } })
      
 
       const parsedUsers = normalizeUsers(response.data)
       setUsers(parsedUsers)
-      setCurrentPage(1)
+      setMeta(response.data?.meta || {})
 
       if (parsedUsers.length === 0) {
         setMessage({ type: 'info', text: 'No users returned by the admin API yet.' })
@@ -83,15 +93,27 @@ function UserManagementPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [currentPage, pageSize, searchTerm, sort.direction, sort.key])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      fetchUsers({ showLoading: false, resetMessage: false })
-    }, 0)
+      fetchUsers()
+    }, 300)
 
     return () => window.clearTimeout(timer)
   }, [fetchUsers])
+
+  useEffect(() => {
+    const nextParams = new URLSearchParams()
+
+    if (currentPage > 1) nextParams.set('page', String(currentPage))
+    if (pageSize !== 10) nextParams.set('per_page', String(pageSize))
+    if (searchTerm.trim()) nextParams.set('search', searchTerm.trim())
+    if (sort.key !== 'user') nextParams.set('sort', sort.key)
+    if (sort.direction !== 'asc') nextParams.set('direction', sort.direction)
+
+    setSearchParams(nextParams, { replace: true })
+  }, [currentPage, pageSize, searchTerm, setSearchParams, sort.direction, sort.key])
 
   useEffect(() => {
     let ignore = false
@@ -155,49 +177,22 @@ function UserManagementPage() {
     }
   }
 
-  const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
-      const matchedRole = roles.find((role) => getRoleId(role) === String(user.role_id))
-      const roleLabel = user.sub_role_name || user.role_name || user.role || (matchedRole ? getRoleName(matchedRole) : '')
-
-      return matchesTableSearch([
-        user.id,
-        user.name,
-        user.email,
-        user.phone,
-        user.phone_no,
-        user.city,
-        user.state,
-        roleLabel,
-        user.status,
-        user.created_at,
-      ], searchTerm)
-    })
-  }, [roles, searchTerm, users])
-
-  const { sortedRows, sort, requestSort } = useSortableRows(filteredUsers, {
-    serial: (user) => Number(user.id),
-    user: (user) => user.name,
-    contact: (user) => user.email,
-    city: (user) => user.city,
-    state: (user) => user.state,
-    role: (user) => {
-      const matchedRole = roles.find((role) => getRoleId(role) === String(user.role_id))
-      return user.sub_role_name || user.role_name || user.role || (matchedRole ? getRoleName(matchedRole) : '')
-    },
-    created: (user) => new Date(user.created_at).getTime(),
-  }, 'user')
-
-  const totalUsers = sortedRows.length
-  const totalPages = Math.max(1, Math.ceil(totalUsers / pageSize))
+  const totalUsers = meta.total || 0
+  const totalPages = meta.last_page || 1
   const safeCurrentPage = Math.min(currentPage, totalPages)
-  const startIndex = totalUsers === 0 ? 0 : (safeCurrentPage - 1) * pageSize
-  const endIndex = Math.min(startIndex + pageSize, totalUsers)
+  const startIndex = meta.from ? meta.from - 1 : 0
+  const endIndex = meta.to || 0
+  const usersRows = users
+  const listSearchParams = new URLSearchParams()
 
-  const usersRows = useMemo(
-    () => sortedRows.slice(startIndex, endIndex),
-    [endIndex, sortedRows, startIndex],
-  )
+  if (currentPage > 1) listSearchParams.set('page', String(currentPage))
+  if (pageSize !== 10) listSearchParams.set('per_page', String(pageSize))
+  if (searchTerm.trim()) listSearchParams.set('search', searchTerm.trim())
+  if (sort.key !== 'user') listSearchParams.set('sort', sort.key)
+  if (sort.direction !== 'asc') listSearchParams.set('direction', sort.direction)
+
+  const listQuery = listSearchParams.toString()
+  const usersReturnPath = `/admin/users${listQuery ? `?${listQuery}` : ''}`
 
   const getRoleLabel = (user) => {
     const matchedRole = roles.find((role) => getRoleId(role) === String(user.role_id))
@@ -221,24 +216,7 @@ function UserManagementPage() {
       <section className="admin-data-section">
         <article className="panel-card data-panel-card">
           <div className="panel-head data-panel-head">
-            <div>
-              <h3>Users</h3>
-            </div>
-
             <div className="table-tools">
-              <label className="table-search">
-                Search
-                <input
-                  type="search"
-                  value={searchTerm}
-                  onChange={(event) => {
-                    setSearchTerm(event.target.value)
-                    setCurrentPage(1)
-                  }}
-                  placeholder="Search users"
-                />
-              </label>
-
               <label>
                 Rows
                 <select
@@ -253,6 +231,23 @@ function UserManagementPage() {
                   ))}
                 </select>
               </label>
+
+              <div className="table-tools-actions">
+                <label className="table-search">
+                  Search
+                  <input
+                    type="search"
+                    value={searchTerm}
+                    onChange={(event) => {
+                      setSearchTerm(event.target.value)
+                      setCurrentPage(1)
+                    }}
+                    placeholder="Search users"
+                  />
+                </label>
+
+                {canCreateUsers ? <Link to="/admin/users/new" className="ghost-btn table-add-btn">Add New User</Link> : null}
+              </div>
             </div>
           </div>
 
@@ -263,7 +258,7 @@ function UserManagementPage() {
           ) : usersRows.length === 0 ? (
             <p className="subtext text-center">No users match your search.</p>
           ) : (
-            <div className="table-wrap">
+            <div className="table-wrap user-table-wrap">
               <table className="data-table user-table">
                 <thead>
                   <tr>
@@ -271,10 +266,9 @@ function UserManagementPage() {
                     <SortableHeader column="user" label="User" sort={sort} onSort={requestSort} />
                     <SortableHeader column="contact" label="Contact" sort={sort} onSort={requestSort} />
                     <SortableHeader column="city" label="City" sort={sort} onSort={requestSort} />
-                    <SortableHeader column="state" label="State" sort={sort} onSort={requestSort} />
                     <SortableHeader column="role" label="Role" sort={sort} onSort={requestSort} />
                     <SortableHeader column="created" label="Created" sort={sort} onSort={requestSort} />
-                    <th className='text-center'>Actions</th>
+                    <th className="actions-cell">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -294,7 +288,6 @@ function UserManagementPage() {
                         </div>
                       </td>
                       <td>{user.city || '—'}</td>
-                      <td>{user.state || '—'}</td>
                       <td><span className="role-badge">{getRoleLabel(user)}</span></td>
                       <td>{formatDate(user.created_at)}</td>
                       <td className="actions-cell">
@@ -316,7 +309,13 @@ function UserManagementPage() {
                           <span className={`status-badge ${getStatusLabel(user.status).toLowerCase()}`}>{getStatusLabel(user.status)}</span>
                         )}
                           {canUpdateUsers ? (
-                            <Link className="mini-btn edit-btn icon-action-btn" to={`/admin/users/${user.id}/edit`} aria-label={`Update ${user.name || 'user'}`} title="Update user">
+                            <Link
+                              className="mini-btn edit-btn icon-action-btn"
+                              to={`/admin/users/${user.id}/edit?returnTo=${encodeURIComponent(usersReturnPath)}`}
+                              state={{ returnTo: usersReturnPath }}
+                              aria-label={`Update ${user.name || 'user'}`}
+                              title="Update user"
+                            >
                               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
                             </Link>
                           ) : null}

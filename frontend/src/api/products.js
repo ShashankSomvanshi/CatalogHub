@@ -23,10 +23,9 @@ export function normalizeProducts(payload) {
   return findProductArray(payload) || []
 }
 
-export async function fetchProducts() {
-  const response = await api.get('/api/admin/products')
-
-  return normalizeProducts(response.data)
+export async function fetchProductsPage(params = {}) {
+  const response = await api.get('/api/admin/products', { params })
+  return { records: normalizeProducts(response.data), meta: response.data?.meta || {} }
 }
 
 export async function fetchPublicProducts() {
@@ -106,5 +105,5 @@ export function formatProductPrice(price) {
 
   return Number.isNaN(amount)
     ? price
-    : amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })
+    : amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }

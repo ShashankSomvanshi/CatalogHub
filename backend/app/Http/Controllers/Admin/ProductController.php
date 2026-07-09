@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Admin\Concerns\AuthorizesAdminAccess;
+use App\Http\Controllers\Admin\Concerns\PaginatesAdminTables;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Category;
@@ -12,7 +13,7 @@ use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
-    use AuthorizesAdminAccess;
+    use AuthorizesAdminAccess, PaginatesAdminTables;
 
     public function publicIndex(): JsonResponse
     {
@@ -83,12 +84,36 @@ class ProductController extends Controller
     {
         $this->ensureAdminOrPermission($request, 'products', 'view');
 
-        $products = Product::with('category:id,category_name')
-            ->select('id', 'product_name', 'category_id', 'sku', 'image', 'price', 'description', 'status', 'created_at')
-            ->latest()
-            ->get();
+        $query = Product::with('category:id,category_name')
+            ->select('id', 'product_name', 'category_id', 'sku', 'image', 'price', 'description', 'status', 'created_at');
+        foreach ($this->searchTerms($request) as $term) {
+            $query->where(fn ($search) => $search
+                ->whereRaw('LOWER(product_name) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(sku) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(description) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(status) LIKE ?', ["%{$term}%"])
+                ->orWhere('price', 'like', "%{$term}%")
+                ->orWhereHas('category', fn ($category) => $category->whereRaw('LOWER(category_name) LIKE ?', ["%{$term}%"])));
+        }
+        foreach ($this->fieldSearchTerms($request, 'product_search') as $term) {
+            $query->whereRaw('LOWER(product_name) LIKE ?', ["%{$term}%"]);
+        }
+        foreach ($this->fieldSearchTerms($request, 'category_search') as $term) {
+            $query->whereHas('category', fn ($category) => $category->whereRaw('LOWER(category_name) LIKE ?', ["%{$term}%"]));
+        }
+        foreach ($this->fieldSearchTerms($request, 'sku_search') as $term) {
+            $query->whereRaw('LOWER(sku) LIKE ?', ["%{$term}%"]);
+        }
+        $direction = $request->input('direction') === 'asc' ? 'asc' : 'desc';
+        if ($request->input('sort') === 'category') {
+            $query->orderBy(Category::select('category_name')->whereColumn('categories.id', 'products.category_id'), $direction);
+        } else {
+            $sort = ['id' => 'id', 'product' => 'product_name', 'description' => 'description', 'price' => 'price', 'sku' => 'sku'][$request->input('sort')] ?? 'created_at';
+            $query->orderBy($sort, $direction);
+        }
+        $products = $query->paginate($this->perPage($request));
 
-        return response()->json(['products' => $products], 200);
+        return response()->json(['products' => $products->items(), 'meta' => $this->paginationMeta($products)], 200);
     }
 
     public function store(Request $request): JsonResponse
@@ -186,5 +211,16 @@ class ProductController extends Controller
     private function normalizeStatus(mixed $status): string
     {
         return in_array($status, ['inactive', '0', 0, false], true) ? 'inactive' : 'active';
+    }
+
+    private function fieldSearchTerms(Request $request, string $field): array
+    {
+        preg_match_all('/"([^"]+)"|(\S+)/', strtolower(trim((string) $request->input($field, ''))), $matches);
+
+        return array_values(array_filter(array_map(
+            static fn ($phrase, $word) => $phrase !== '' ? $phrase : $word,
+            $matches[1] ?? [],
+            $matches[2] ?? []
+        )));
     }
 }

@@ -6,7 +6,7 @@ import PublicFooter from './PublicFooter.jsx'
 import PublicHeader from './PublicHeader.jsx'
 
 function formatMoney(value) {
-  return Number(value || 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR' })
+  return Number(value || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
 
 function formatDate(value) {
@@ -53,7 +53,7 @@ function MyOrdersPage() {
                 const image = getProductImage(item.product)
                 return <div className="my-order-product" key={item.id}>{image ? <img src={image} alt="" /> : <span className="my-order-image-placeholder" />}<div><strong>{item.product_name}</strong><small>{item.sku || 'No SKU'} · Quantity: {item.quantity}</small></div><strong>{formatMoney(item.subtotal)}</strong></div>
               })}</div>
-              <footer><div><span>Delivery address</span><p>{order.shipping_address}, {order.shipping_pincode}</p></div><div className="my-order-totals"><span>Subtotal: {formatMoney(order.subtotal)}</span><span>Shipping: {formatMoney(order.shipping_amount)}</span></div></footer>
+              <footer><div><span>Delivery address</span><p>{[order.shipping_address, order.shipping_city, order.shipping_state, order.shipping_pincode].filter(Boolean).join(', ')}</p></div><div className="my-order-totals"><span>Subtotal: {formatMoney(order.subtotal)}</span><span>Shipping: {formatMoney(order.shipping_amount)}</span></div></footer>
             </article>
           ))}</section>
         )}

@@ -116,10 +116,7 @@ function Sidebar({ adminName, adminRole, menuItems, title = 'Admin Panel', subti
         ))}
       </nav>
 
-      <div className="sidebar-footer">
-        <b className="sidebar-footer-avatar">{(adminName || 'A').slice(0, 1).toUpperCase()}</b>
-        <div><strong>Hello {adminName}</strong><span>{roleLabel}</span></div>
-      </div>
+     
     </aside>
   )
 }

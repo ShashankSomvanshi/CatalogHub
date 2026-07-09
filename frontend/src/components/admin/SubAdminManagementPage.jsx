@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { deleteSubAdmin, fetchSubAdmins } from '../../api/access.js'
 import { confirmDelete, showSuccess } from '../../utils/alerts.js'
 import SortableHeader from './SortableHeader.jsx'
-import useSortableRows from './useSortableRows.js'
-import { matchesTableSearch } from '../../utils/tableSearch.js'
+import useServerSort from './useServerSort.js'
 import TableLoader from './TableLoader.jsx'
 
 function SubAdminManagementPage() {
@@ -15,17 +14,20 @@ function SubAdminManagementPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [meta, setMeta] = useState({ total: 0, last_page: 1, from: 0, to: 0 })
+  const { sort, requestSort: changeSort } = useServerSort('name')
+  const requestSort = (key) => { setCurrentPage(1); changeSort(key) }
 
   const loadSubAdmins = useCallback(async ({ showLoading = true, resetMessage = true } = {}) => {
     if (showLoading) setLoading(true)
     if (resetMessage) setMessage({ type: '', text: '' })
 
     try {
-      const loadedSubAdmins = await fetchSubAdmins()
-      setSubAdmins(loadedSubAdmins)
-      setCurrentPage(1)
+      const page = await fetchSubAdmins({ page: currentPage, per_page: pageSize, search: searchTerm, sort: sort.key, direction: sort.direction })
+      setSubAdmins(page.records)
+      setMeta(page.meta)
 
-      if (loadedSubAdmins.length === 0) {
+      if (page.records.length === 0) {
         setMessage({ type: 'info', text: 'No sub admins returned by the admin API yet.' })
       }
     } catch (error) {
@@ -33,12 +35,12 @@ function SubAdminManagementPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [currentPage, pageSize, searchTerm, sort.direction, sort.key])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      loadSubAdmins({ showLoading: false, resetMessage: false })
-    }, 0)
+      loadSubAdmins()
+    }, 300)
 
     return () => window.clearTimeout(timer)
   }, [loadSubAdmins])
@@ -59,30 +61,12 @@ function SubAdminManagementPage() {
     }
   }
 
-  const filteredSubAdmins = useMemo(() => {
-    return subAdmins.filter((subAdmin) => matchesTableSearch([
-      subAdmin.id,
-      subAdmin.name,
-      subAdmin.email,
-      subAdmin.phone_no,
-      subAdmin.status,
-      subAdmin.sub_admin_role?.name,
-    ], searchTerm))
-  }, [searchTerm, subAdmins])
-
-  const { sortedRows, sort, requestSort } = useSortableRows(filteredSubAdmins, {
-    id: (subAdmin) => Number(subAdmin.id),
-    name: (subAdmin) => subAdmin.name,
-    contact: (subAdmin) => subAdmin.email,
-    status: (subAdmin) => subAdmin.status,
-  }, 'name')
-
-  const totalSubAdmins = sortedRows.length
-  const totalPages = Math.max(1, Math.ceil(totalSubAdmins / pageSize))
+  const totalSubAdmins = meta.total || 0
+  const totalPages = meta.last_page || 1
   const safeCurrentPage = Math.min(currentPage, totalPages)
-  const startIndex = totalSubAdmins === 0 ? 0 : (safeCurrentPage - 1) * pageSize
-  const endIndex = Math.min(startIndex + pageSize, totalSubAdmins)
-  const subAdminRows = sortedRows.slice(startIndex, endIndex)
+  const startIndex = meta.from ? meta.from - 1 : 0
+  const endIndex = meta.to || 0
+  const subAdminRows = subAdmins
   const getStatusLabel = (status) => status || 'active'
 
   return (
@@ -134,14 +118,14 @@ function SubAdminManagementPage() {
             <p className="subtext text-center">No sub admins found.</p>
           ) : (
             <div className="table-wrap">
-              <table className="data-table">
+              <table className="data-table sub-admin-table">
                 <thead>
                   <tr>
                     <SortableHeader column="id" label="ID" sort={sort} onSort={requestSort} />
                     <SortableHeader column="name" label="Sub Admin" sort={sort} onSort={requestSort} />
                     <SortableHeader column="contact" label="Contact" sort={sort} onSort={requestSort} />
                     <SortableHeader column="status" label="Status" sort={sort} onSort={requestSort} />
-                    <th>Actions</th>
+                    <th className="actions-cell">Actions</th>
                   </tr>
                 </thead>
                 <tbody>

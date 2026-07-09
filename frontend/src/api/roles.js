@@ -28,9 +28,14 @@ export async function fetchRoles() {
 }
 
 export async function fetchSubAdminRoles() {
-  const response = await api.get('/api/admin/sub-admin-roles')
+  const response = await api.get('/api/admin/sub-admin-roles', { params: { per_page: 100 } })
 
   return normalizeRoles(response.data?.sub_admin_roles || response.data)
+}
+
+export async function fetchSubAdminRolesPage(params = {}) {
+  const response = await api.get('/api/admin/sub-admin-roles', { params })
+  return { records: normalizeRoles(response.data?.sub_admin_roles || response.data), meta: response.data?.meta || {} }
 }
 
 export async function fetchSubAdminRole(roleId) {
@@ -38,8 +43,8 @@ export async function fetchSubAdminRole(roleId) {
   return response.data.sub_admin_role
 }
 
-export async function createSubAdminRole(name) {
-  const response = await api.post('/api/admin/sub-admin-roles', { name })
+export async function createSubAdminRole(name, permissions = []) {
+  const response = await api.post('/api/admin/sub-admin-roles', { name, permissions })
   return response.data.sub_admin_role
 }
 

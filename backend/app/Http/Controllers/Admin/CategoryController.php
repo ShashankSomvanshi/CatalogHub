@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Admin\Concerns\AuthorizesAdminAccess;
+use App\Http\Controllers\Admin\Concerns\PaginatesAdminTables;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use Illuminate\Http\JsonResponse;
@@ -11,7 +12,7 @@ use Illuminate\Validation\Rule;
 
 class CategoryController extends Controller
 {
-    use AuthorizesAdminAccess;
+    use AuthorizesAdminAccess, PaginatesAdminTables;
 
     public function publicIndex(): JsonResponse
     {
@@ -28,11 +29,17 @@ class CategoryController extends Controller
     {
         $this->ensureAdminOrPermission($request, 'categories', 'view');
 
-        $categories = Category::select('id', 'category_name', 'status', 'created_at')
-            ->latest()
-            ->get();
+        $query = Category::select('id', 'category_name', 'status', 'created_at');
+        foreach ($this->searchTerms($request) as $term) {
+            $query->where(fn ($search) => $search
+                ->whereRaw('LOWER(category_name) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(status) LIKE ?', ["%{$term}%"])
+                ->orWhere('id', 'like', "%{$term}%"));
+        }
+        $sort = ['id' => 'id', 'name' => 'category_name', 'created' => 'created_at'][$request->input('sort')] ?? 'created_at';
+        $categories = $query->orderBy($sort, $request->input('direction') === 'asc' ? 'asc' : 'desc')->paginate($this->perPage($request));
 
-        return response()->json(['categories' => $categories], 200);
+        return response()->json(['categories' => $categories->items(), 'meta' => $this->paginationMeta($categories)], 200);
     }
 
     public function store(Request $request): JsonResponse

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Admin\Concerns\AuthorizesAdminAccess;
+use App\Http\Controllers\Admin\Concerns\PaginatesAdminTables;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Hash;
 
 class UserManagementController extends Controller
 {
-    use AuthorizesAdminAccess;
+    use AuthorizesAdminAccess, PaginatesAdminTables;
 
     private function normalizeRoleName(string $name): string
     {
@@ -23,15 +24,26 @@ class UserManagementController extends Controller
     {
         $this->ensureAdminOrPermission($request, 'users', 'view');
 
-        $users = User::with(['roleRelation', 'subAdminRole'])
+        $query = User::with(['roleRelation', 'subAdminRole'])
             ->select('id', 'name', 'email', 'phone_no', 'city', 'state', 'profile_image', 'role', 'role_id', 'sub_role_id', 'status', 'created_at')
             ->where('id', '!=', $request->user()->id)
             ->when(! $this->isFullAdmin($request->user()), fn ($query) => $query->where(function ($roleQuery) {
                 $roleQuery->where('role_id', 3)->orWhere('role', 'user');
-            }))
-            ->latest()
-            ->get()
-            ->map(function (User $user) {
+            }));
+        foreach ($this->searchTerms($request) as $term) {
+            $query->where(fn ($search) => $search
+                ->whereRaw('LOWER(name) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(email) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(phone_no) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(city) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(state) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(role) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(status) LIKE ?', ["%{$term}%"])
+                ->orWhereHas('subAdminRole', fn ($role) => $role->whereRaw('LOWER(name) LIKE ?', ["%{$term}%"])));
+        }
+        $sort = ['serial' => 'id', 'user' => 'name', 'contact' => 'email', 'city' => 'city', 'state' => 'state', 'role' => 'role', 'created' => 'created_at'][$request->input('sort')] ?? 'created_at';
+        $users = $query->orderBy($sort, $request->input('direction') === 'asc' ? 'asc' : 'desc')->paginate($this->perPage($request));
+        $users->through(function (User $user) {
                 return [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -50,7 +62,7 @@ class UserManagementController extends Controller
                 ];
             });
 
-        return response()->json(['users' => $users], 200);
+        return response()->json(['users' => $users->items(), 'meta' => $this->paginationMeta($users)], 200);
     }
 
     public function store(Request $request): JsonResponse

@@ -1,8 +1,8 @@
 import { api } from './client.js'
 
-export async function fetchTransactions() {
-  const response = await api.get('/api/admin/transactions')
-  return response.data?.transactions || []
+export async function fetchTransactions(params = {}) {
+  const response = await api.get('/api/admin/transactions', { params })
+  return { records: response.data?.transactions || [], meta: response.data?.meta || {} }
 }
 
 export async function fetchTransaction(transactionId) {

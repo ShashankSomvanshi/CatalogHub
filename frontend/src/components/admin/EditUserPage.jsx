@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import Sidebar from '../Sidebar.jsx'
 import AdminTopNavbar from './AdminTopNavbar.jsx'
 import DashboardFooter from '../DashboardFooter.jsx'
@@ -24,6 +24,7 @@ function findUserArray(payload) {
 function EditUserPage() {
   const { userId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const storedAdmin = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const adminName = storedAdmin?.name || 'Admin'
   const adminRole = storedAdmin?.role || storedAdmin?.role_name || 'Administrator'
@@ -49,6 +50,11 @@ function EditUserPage() {
   const [errors, setErrors] = useState({})
 
   const menuItems = getAdminMenuItems(storedAdmin)
+  const queryReturnTo = new URLSearchParams(location.search).get('returnTo')
+  const requestedReturnTo = location.state?.returnTo || queryReturnTo || '/admin/users'
+  const usersReturnPath = typeof requestedReturnTo === 'string' && requestedReturnTo.startsWith('/admin/users')
+    ? requestedReturnTo
+    : '/admin/users'
 
   const handleLogout = () => {
     localStorage.removeItem('auth_token')
@@ -84,7 +90,15 @@ function EditUserPage() {
           return
         }
 
-        setRoles(loadedRoles)
+        const assignableRoles = loadedRoles.filter(
+          (role) => getRoleId(role) !== '1' && getRoleName(role).trim().toLowerCase() !== 'admin',
+        )
+        const selectedRoleId = String(selectedUser.role_id || selectedUser.role || '')
+        const editableRoleId = assignableRoles.some((role) => getRoleId(role) === selectedRoleId)
+          ? selectedRoleId
+          : getRoleId(assignableRoles[0])
+
+        setRoles(assignableRoles)
         setSubAdminRoles(loadedSubAdminRoles)
         setForm({
           name: selectedUser.name || '',
@@ -94,7 +108,7 @@ function EditUserPage() {
           state: selectedUser.state || '',
           password: '',
           confirm_password: '',
-          role_id: String(selectedUser.role_id || selectedUser.role || getRoleId(loadedRoles[0]) || ''),
+          role_id: editableRoleId,
           sub_role_id: String(selectedUser.sub_role_id || ''),
           status: selectedUser.status || 'active',
         })
@@ -177,7 +191,7 @@ function EditUserPage() {
 
       await api.put(`/api/admin/users/${userId}`, payload)
       await showSuccess('User updated successfully')
-      navigate('/admin/users')
+      navigate(usersReturnPath)
     } catch (error) {
       const apiErrors = error.response?.data?.errors || {}
       const nextApiErrors = {}
@@ -217,6 +231,7 @@ function EditUserPage() {
           adminName={adminName}
           adminRole={adminRole}
           onLogout={handleLogout}
+          title="User / Edit"
         />
 
         <section className="dashboard-main-content admin-main-content">
@@ -224,10 +239,10 @@ function EditUserPage() {
             <article className="panel-card admin-form-card">
               <div className="admin-form-head">
                 <div>
-                  <h3>Edit user</h3>
+                  <h3>Edit User</h3>
                   <p className="subtext">Update account details and role access.</p>
                 </div>
-                <Link to="/admin/users" className="ghost-btn">Back to Users</Link>
+                {/* <Link to={usersReturnPath} className="ghost-btn">Back to Users</Link> */}
               </div>
 
               {message.text ? <p className={`status-message ${message.type}`}>{message.text}</p> : null}
@@ -262,12 +277,12 @@ function EditUserPage() {
                       <option value="inactive">Inactive</option>
                     </select></label>
                     <label><span className="field-label">Password</span><input type="password" value={form.password} onChange={(event) => { setForm({ ...form, password: event.target.value }); setErrors({ ...errors, password: '' }) }} placeholder="Leave blank to keep current password" aria-invalid={Boolean(errors.password)} />{errors.password && <small className="admin-field-error">{errors.password}</small>}</label>
-                    <label><span className="field-label">Confirm password</span><input type="password" value={form.confirm_password} onChange={(event) => { setForm({ ...form, confirm_password: event.target.value }); setErrors({ ...errors, confirm_password: '' }) }} placeholder="Re-enter new password" aria-invalid={Boolean(errors.confirm_password)} />{errors.confirm_password && <small className="admin-field-error">{errors.confirm_password}</small>}</label>
+                    <label><span className="field-label">Confirm Password</span><input type="password" value={form.confirm_password} onChange={(event) => { setForm({ ...form, confirm_password: event.target.value }); setErrors({ ...errors, confirm_password: '' }) }} placeholder="Re-enter new password" aria-invalid={Boolean(errors.confirm_password)} />{errors.confirm_password && <small className="admin-field-error">{errors.confirm_password}</small>}</label>
                   </div>
 
                   <div className="form-actions">
                     <button type="submit" className="submit-btn admin-btn" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
-                    <Link to="/admin/users" className="ghost-btn">Cancel</Link>
+                    <Link to={usersReturnPath} className="ghost-btn">Cancel</Link>
                   </div>
                 </form>
               )}

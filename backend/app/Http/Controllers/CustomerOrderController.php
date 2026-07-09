@@ -20,6 +20,8 @@ class CustomerOrderController extends Controller
                 'user_id',
                 'order_number',
                 'shipping_address',
+                'shipping_city',
+                'shipping_state',
                 'shipping_pincode',
                 'payment_method',
                 'payment_status',

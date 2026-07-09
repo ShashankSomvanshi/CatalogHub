@@ -895,6 +895,7 @@
 .checkout-radio-grid input,
 .checkout-payment-grid input { accent-color: #5546e8; }
 .checkout-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
+.checkout-address-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 17px; }
 .checkout-shipping-fields { margin-top: 18px; }
 .checkout-field { display: flex; flex-direction: column; gap: 7px; color: #344057; font-size: 0.78rem; font-weight: 750; }
 .checkout-field.wide { grid-column: 1 / -1; }
@@ -2123,10 +2124,10 @@ html[data-admin-sidebar='collapsed'] .admin-dashboard-shell { grid-template-colu
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 6px 8px;
+  padding: 10px 12px;
   background: rgba(15, 23, 42, 0.88);
   border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow: 0 8px 18px rgba(2, 6, 23, 0.18);
   backdrop-filter: blur(10px);
 }
@@ -2137,8 +2138,9 @@ html[data-admin-sidebar='collapsed'] .admin-dashboard-shell { grid-template-colu
 
 .topbar h1 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1rem;
   line-height: 1.2;
+  font-weight: 700;
 }
 
 .topbar-actions {
@@ -2244,6 +2246,8 @@ html[data-admin-theme='light'] .description-cell,
 html[data-admin-theme='light'] .id-cell { color: #526078; }
 
 html[data-admin-theme='light'] .ghost-btn { border-color: #cbd5e1; background: #fff; color: #334155; }
+html[data-admin-theme='light'] .table-add-btn { border-color: #6554df; background: #6554df; color: #fff; }
+html[data-admin-theme='light'] .table-add-btn:hover { border-color: #5140ca; background: #5140ca; color: #fff; }
 html[data-admin-theme='light'] .topbar-action-btn .ghost-btn { border-color: #6554df; background: #6554df; color: #fff; }
 html[data-admin-theme='light'] .topbar-action-btn .ghost-btn:hover { background: #5140ca; }
 html[data-admin-theme='light'] .mini-btn { border-color: #cbd5e1; background: #eef2f7; color: #334155; }
@@ -2830,8 +2834,11 @@ html[data-admin-theme='light'] .tinymce-field.invalid {
 .table-tools {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   gap: 10px;
+  width: 100%;
 }
 
 .table-tools label {
@@ -2849,6 +2856,99 @@ html[data-admin-theme='light'] .tinymce-field.invalid {
   background: rgba(15, 23, 42, 0.96);
   color: #f8fafc;
   padding: 8px 10px;
+}
+
+.table-tools-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.transaction-panel-head {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.transaction-panel-title .eyebrow {
+  margin-bottom: 5px;
+}
+
+.transaction-panel-title h3 {
+  margin: 0;
+}
+
+/* .transaction-table-tools {
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+} */
+
+.transaction-filter-tools .table-search input {
+  width: clamp(210px, 26vw, 320px);
+}
+
+@media (max-width: 720px) {
+  .transaction-table-tools,
+  .transaction-filter-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .transaction-filter-tools {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .transaction-table-tools label,
+  .transaction-filter-tools .table-search input,
+  .transaction-filter-tools select {
+    width: 100%;
+  }
+}
+
+.product-filter-tools {
+  flex: 1 1 680px;
+}
+
+.product-filter-tools .table-search input {
+  width: clamp(150px, 14vw, 210px);
+}
+
+.table-filter-btn {
+  min-height: 38px;
+  border-radius: 8px;
+  padding: 8px 14px;
+  line-height: 1;
+}
+
+.table-filter-search-btn {
+  border-color: rgba(105, 87, 232, 0.72);
+  background: rgba(105, 87, 232, 0.9);
+  color: #fff;
+}
+
+.table-filter-search-btn:hover:not(:disabled) {
+  border-color: #5543da;
+  background: #5543da;
+}
+
+.table-add-btn {
+  border-color: #6957e8;
+  background: #6957e8;
+  color: #fff;
+  border-radius: 8px;
+  padding: 11px 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.table-add-btn:hover {
+  border-color: #5543da;
+  background: #5543da;
+  color: #fff;
 }
 
 .table-search input {
@@ -3240,8 +3340,10 @@ html[data-admin-theme='light'] .tinymce-field.invalid {
 
 .status-toggle {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  gap: 3px;
   border: 0;
   background: transparent;
   color: #fecaca;
@@ -3293,28 +3395,103 @@ html[data-admin-theme='light'] .tinymce-field.invalid {
 }
 
 .user-table {
-  min-width: 1160px;
+  min-width: 0;
 }
 
+.user-table-wrap {
+  overflow-x: hidden;
+}
+
+.user-table th,
+.user-table td {
+  min-width: 0;
+  padding-inline: 10px;
+}
+
+.user-table th:nth-child(1),
+.user-table td:nth-child(1) { width: 6%; }
+.user-table th:nth-child(2),
+.user-table td:nth-child(2) { width: 16%; }
+.user-table th:nth-child(3),
+.user-table td:nth-child(3) { width: 22%; }
 .user-table th:nth-child(4),
 .user-table td:nth-child(4) {
-  width: 190px;
+  width: 9%;
 }
 
 .user-table th:nth-child(5),
 .user-table td:nth-child(5) {
-  width: 160px;
+  width: 14%;
 }
 
 .user-table th:nth-child(6),
 .user-table td:nth-child(6) {
-  width: 280px;
+  width: 11%;
 }
+
+.user-table th:nth-child(7),
+.user-table td:nth-child(7) { width: 22%; }
+
+.user-table td:not(.actions-cell),
+.user-table td:not(.actions-cell) * {
+  max-width: 100%;
+}
+
+.user-table td:not(.actions-cell) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-table .contact-cell,
+.user-table .user-cell,
+.user-table .user-cell > div {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.user-table .contact-cell span,
+.user-table .user-cell strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-table .action-btn-group { gap: 6px; }
+.user-table .status-toggle { gap: 3px; font-size: 0.72rem; }
 
 .user-table .role-badge {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Keep listing actions compact and aligned consistently at the table edge. */
+.data-table th.actions-cell,
+.data-table td.actions-cell {
+  width: 180px !important;
+  padding-inline: 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.data-table .action-btn-group,
+.data-table .user-action-group,
+.data-table .role-actions {
+  justify-content: flex-end;
+}
+
+.role-management-table th.actions-cell,
+.role-management-table td.actions-cell,
+.sub-admin-table th.actions-cell,
+.sub-admin-table td.actions-cell {
+  width: 110px !important;
+}
+
+.transaction-table th.actions-cell,
+.transaction-table td.actions-cell {
+  width: 72px !important;
 }
 
 .mini-btn {

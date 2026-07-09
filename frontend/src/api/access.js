@@ -52,10 +52,9 @@ export function getAdminMenuItems(admin = getStoredAdmin()) {
   return ['Dashboard', ...permittedItems]
 }
 
-export async function fetchSubAdmins() {
-  const response = await api.get('/api/admin/sub-admins')
-
-  return response.data?.sub_admins || []
+export async function fetchSubAdmins(params = {}) {
+  const response = await api.get('/api/admin/sub-admins', { params })
+  return { records: response.data?.sub_admins || [], meta: response.data?.meta || {} }
 }
 
 export async function createSubAdmin(payload) {
@@ -84,6 +83,12 @@ export async function deleteSubAdmin(subAdminId) {
 
 export async function fetchRoleModulePermissions(subAdminRoleId) {
   const response = await api.get(`/api/admin/sub-admin-roles/${subAdminRoleId}/permissions`)
+
+  return response.data
+}
+
+export async function fetchRoleModules() {
+  const response = await api.get('/api/admin/role-modules')
 
   return response.data
 }

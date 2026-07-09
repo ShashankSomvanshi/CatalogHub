@@ -219,6 +219,7 @@ function AddNewUserPage() {
           adminName={adminName}
           adminRole={adminRole}
           onLogout={handleLogout}
+          title="User / Add"
         />
 
         <section className="dashboard-main-content admin-main-content">
@@ -231,9 +232,9 @@ function AddNewUserPage() {
                     Create an account and assign its role.
                   </p>
                 </div>
-                <Link to="/admin/users" className="ghost-btn">
+                {/* <Link to="/admin/users" className="ghost-btn">
                   Back to Users
-                </Link>
+                </Link> */}
               </div>
 
               <form
@@ -418,7 +419,7 @@ function AddNewUserPage() {
                   </label>
                   <label>
                     <span className="field-label">
-                      Confirm password <span className="required-mark">*</span>
+                      Confirm Password <span className="required-mark">*</span>
                     </span>
                     <input
                       type="password"

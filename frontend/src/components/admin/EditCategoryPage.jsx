@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import Sidebar from '../Sidebar.jsx'
 import AdminTopNavbar from './AdminTopNavbar.jsx'
 import DashboardFooter from '../DashboardFooter.jsx'
@@ -11,6 +11,7 @@ import { showSuccess } from '../../utils/alerts.js'
 function EditCategoryPage() {
   const { categoryId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const storedAdmin = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const adminName = storedAdmin?.name || 'Admin'
   const adminRole = storedAdmin?.role || storedAdmin?.role_name || 'Administrator'
@@ -20,6 +21,11 @@ function EditCategoryPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
   const [errors, setErrors] = useState({})
+  const queryReturnTo = new URLSearchParams(location.search).get('returnTo')
+  const requestedReturnTo = location.state?.returnTo || queryReturnTo || '/admin/categories'
+  const categoriesReturnPath = typeof requestedReturnTo === 'string' && requestedReturnTo.startsWith('/admin/categories')
+    ? requestedReturnTo
+    : '/admin/categories'
 
   const handleLogout = () => {
     localStorage.removeItem('auth_token')
@@ -87,7 +93,7 @@ function EditCategoryPage() {
         status: form.status,
       })
       await showSuccess('Category updated successfully')
-      navigate('/admin/categories')
+      navigate(categoriesReturnPath)
     } catch (error) {
       const nameError = error.response?.data?.errors?.name?.[0]
       if (nameError) setErrors({ name: nameError })
@@ -105,7 +111,7 @@ function EditCategoryPage() {
       <Sidebar adminName={adminName} adminRole={adminRole} menuItems={menuItems} title="Admin Panel" subtitle="Manage users, categories, products, and permissions." />
 
       <section className="dashboard-main admin-panel-main">
-        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} />
+        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} title="Category / Edit" />
 
         <section className="dashboard-main-content admin-main-content">
           <section className="admin-form-section">
@@ -115,7 +121,7 @@ function EditCategoryPage() {
                   <h3>Edit Category</h3>
                   <p className="subtext">Update category name and status.</p>
                 </div>
-                <Link to="/admin/categories" className="ghost-btn">Back to Categories</Link>
+                <Link to={categoriesReturnPath} className="ghost-btn">Back to Categories</Link>
               </div>
 
               {message.text ? <p className={`status-message ${message.type}`}>{message.text}</p> : null}
@@ -134,7 +140,7 @@ function EditCategoryPage() {
 
                   <div className="form-actions">
                     <button type="submit" className="submit-btn admin-btn" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
-                    <Link to="/admin/categories" className="ghost-btn">Cancel</Link>
+                    <Link to={categoriesReturnPath} className="ghost-btn">Cancel</Link>
                   </div>
                 </form>
               )}

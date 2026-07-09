@@ -1,37 +1,60 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../../api/client.js'
-import { fetchProducts, getProductCategoryName, getProductImage, getProductName } from '../../api/products.js'
+import { fetchProductsPage, getProductCategoryName, getProductImage, getProductName } from '../../api/products.js'
 import { hasPermission } from '../../api/access.js'
 import { confirmDelete, showSuccess } from '../../utils/alerts.js'
 import SortableHeader from './SortableHeader.jsx'
-import useSortableRows from './useSortableRows.js'
-import { matchesTableSearch } from '../../utils/tableSearch.js'
+import useServerSort from './useServerSort.js'
 import TableLoader from './TableLoader.jsx'
 
 function ProductManagementPage() {
   const storedAdmin = JSON.parse(localStorage.getItem('auth_user') || '{}')
+  const canCreateProducts = hasPermission('products', 'create', storedAdmin)
   const canUpdateProducts = hasPermission('products', 'update', storedAdmin)
   const canDeleteProducts = hasPermission('products', 'delete', storedAdmin)
   const pageSizeOptions = [5, 10, 25]
+  const [searchParams, setSearchParams] = useSearchParams()
+  const readPositiveInt = (value, fallback) => {
+    const parsed = Number.parseInt(value, 10)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+  }
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState({ type: '', text: '' })
-  const [searchTerm, setSearchTerm] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [productFilterInput, setProductFilterInput] = useState(() => searchParams.get('product_search') || '')
+  const [categoryFilterInput, setCategoryFilterInput] = useState(() => searchParams.get('category_search') || '')
+  const [skuFilterInput, setSkuFilterInput] = useState(() => searchParams.get('sku_search') || '')
+  const [productSearch, setProductSearch] = useState(() => searchParams.get('product_search') || '')
+  const [categorySearch, setCategorySearch] = useState(() => searchParams.get('category_search') || '')
+  const [skuSearch, setSkuSearch] = useState(() => searchParams.get('sku_search') || '')
+  const [currentPage, setCurrentPage] = useState(() => readPositiveInt(searchParams.get('page'), 1))
+  const [pageSize, setPageSize] = useState(() => {
+    const requestedSize = readPositiveInt(searchParams.get('per_page'), 10)
+    return pageSizeOptions.includes(requestedSize) ? requestedSize : 10
+  })
   const [updatingStatusId, setUpdatingStatusId] = useState(null)
+  const [meta, setMeta] = useState({ total: 0, last_page: 1, from: 0, to: 0 })
+  const { sort, requestSort } = useServerSort(searchParams.get('sort') || 'product', searchParams.get('direction') === 'desc' ? 'desc' : 'asc')
 
   const loadProducts = useCallback(async ({ showLoading = true, resetMessage = true } = {}) => {
     if (showLoading) setLoading(true)
     if (resetMessage) setMessage({ type: '', text: '' })
 
     try {
-      const loadedProducts = await fetchProducts()
-      setProducts(loadedProducts)
-      setCurrentPage(1)
+      const page = await fetchProductsPage({
+        page: currentPage,
+        per_page: pageSize,
+        product_search: productSearch,
+        category_search: categorySearch,
+        sku_search: skuSearch,
+        sort: sort.key,
+        direction: sort.direction,
+      })
+      setProducts(page.records)
+      setMeta(page.meta)
 
-      if (loadedProducts.length === 0) {
+      if (page.records.length === 0) {
         setMessage({ type: 'info', text: 'No products returned by the admin API yet.' })
       }
     } catch (error) {
@@ -42,15 +65,44 @@ function ProductManagementPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [categorySearch, currentPage, pageSize, productSearch, skuSearch, sort.direction, sort.key])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      loadProducts({ showLoading: false, resetMessage: false })
-    }, 0)
+      loadProducts()
+    }, 300)
 
     return () => window.clearTimeout(timer)
   }, [loadProducts])
+
+  useEffect(() => {
+    const nextParams = new URLSearchParams()
+    if (currentPage > 1) nextParams.set('page', String(currentPage))
+    if (pageSize !== 10) nextParams.set('per_page', String(pageSize))
+    if (productSearch) nextParams.set('product_search', productSearch)
+    if (categorySearch) nextParams.set('category_search', categorySearch)
+    if (skuSearch) nextParams.set('sku_search', skuSearch)
+    if (sort.key !== 'product') nextParams.set('sort', sort.key)
+    if (sort.direction !== 'asc') nextParams.set('direction', sort.direction)
+    setSearchParams(nextParams, { replace: true })
+  }, [categorySearch, currentPage, pageSize, productSearch, setSearchParams, skuSearch, sort.direction, sort.key])
+
+  const handleSearch = () => {
+    setProductSearch(productFilterInput.trim())
+    setCategorySearch(categoryFilterInput.trim())
+    setSkuSearch(skuFilterInput.trim())
+    setCurrentPage(1)
+  }
+
+  const handleClearFilters = () => {
+    setProductFilterInput('')
+    setCategoryFilterInput('')
+    setSkuFilterInput('')
+    setProductSearch('')
+    setCategorySearch('')
+    setSkuSearch('')
+    setCurrentPage(1)
+  }
 
   const handleDelete = async (productId) => {
     if (!await confirmDelete('product')) return
@@ -86,33 +138,22 @@ function ProductManagementPage() {
     }
   }
 
-  const filteredProducts = useMemo(() => {
-    return products.filter((product) => matchesTableSearch([
-      product.id,
-      getProductName(product),
-      getProductCategoryName(product),
-      product.description,
-      product.price,
-      product.sku,
-      product.status,
-    ], searchTerm))
-  }, [products, searchTerm])
-
-  const { sortedRows, sort, requestSort } = useSortableRows(filteredProducts, {
-    id: (product) => Number(product.id),
-    product: (product) => getProductName(product),
-    category: (product) => getProductCategoryName(product),
-    description: (product) => product.description,
-    price: (product) => Number(product.price),
-    sku: (product) => product.sku,
-  }, 'product')
-
-  const totalProducts = sortedRows.length
-  const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize))
+  const totalProducts = meta.total || 0
+  const totalPages = meta.last_page || 1
   const safeCurrentPage = Math.min(currentPage, totalPages)
-  const startIndex = totalProducts === 0 ? 0 : (safeCurrentPage - 1) * pageSize
-  const endIndex = Math.min(startIndex + pageSize, totalProducts)
-  const productRows = sortedRows.slice(startIndex, endIndex)
+  const startIndex = meta.from ? meta.from - 1 : 0
+  const endIndex = meta.to || 0
+  const productRows = products
+  const listSearchParams = new URLSearchParams()
+  if (currentPage > 1) listSearchParams.set('page', String(currentPage))
+  if (pageSize !== 10) listSearchParams.set('per_page', String(pageSize))
+  if (productSearch) listSearchParams.set('product_search', productSearch)
+  if (categorySearch) listSearchParams.set('category_search', categorySearch)
+  if (skuSearch) listSearchParams.set('sku_search', skuSearch)
+  if (sort.key !== 'product') listSearchParams.set('sort', sort.key)
+  if (sort.direction !== 'asc') listSearchParams.set('direction', sort.direction)
+  const listQuery = listSearchParams.toString()
+  const productsReturnPath = `/admin/products${listQuery ? `?${listQuery}` : ''}`
 
   const getStatusLabel = (status) => status || 'active'
   const handleImageError = (event) => {
@@ -123,7 +164,7 @@ function ProductManagementPage() {
   const formatPrice = (price) => {
     const amount = Number(price || 0)
 
-    return Number.isNaN(amount) ? price : amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })
+    return Number.isNaN(amount) ? price : amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
   }
 
   const getDescriptionPreview = (description) => {
@@ -143,24 +184,7 @@ function ProductManagementPage() {
       <section className="admin-data-section">
         <article className="panel-card data-panel-card">
           <div className="panel-head data-panel-head">
-            <div>
-              <h3>Products</h3>
-            </div>
-
             <div className="table-tools">
-              <label className="table-search">
-                Search
-                <input
-                  type="search"
-                  value={searchTerm}
-                  onChange={(event) => {
-                    setSearchTerm(event.target.value)
-                    setCurrentPage(1)
-                  }}
-                  placeholder="Search products"
-                />
-              </label>
-
               <label>
                 Rows
                 <select
@@ -175,6 +199,40 @@ function ProductManagementPage() {
                   ))}
                 </select>
               </label>
+
+              <div className="table-tools-actions product-filter-tools">
+                <label className="table-search" aria-label="Search product">
+                  <input
+                    type="search"
+                    value={productFilterInput}
+                    onChange={(event) => setProductFilterInput(event.target.value)}
+                    placeholder="Search Product"
+                  />
+                </label>
+
+                <label className="table-search" aria-label="Search category">
+                  <input
+                    type="search"
+                    value={categoryFilterInput}
+                    onChange={(event) => setCategoryFilterInput(event.target.value)}
+                    placeholder="Search Category"
+                  />
+                </label>
+
+                <label className="table-search" aria-label="Search SKU">
+                  <input
+                    type="search"
+                    value={skuFilterInput}
+                    onChange={(event) => setSkuFilterInput(event.target.value)}
+                    placeholder="Search SKU"
+                  />
+                </label>
+
+                <button type="button" className="mini-btn table-filter-btn table-filter-search-btn" onClick={handleSearch}>Search</button>
+                <button type="button" className="mini-btn table-filter-btn" onClick={handleClearFilters}>Clear</button>
+
+                {canCreateProducts ? <Link to="/admin/products/new" className="ghost-btn table-add-btn">Add Product</Link> : null}
+              </div>
             </div>
           </div>
 
@@ -196,7 +254,7 @@ function ProductManagementPage() {
                     <SortableHeader column="price" label="Price" sort={sort} onSort={requestSort} />
                     <SortableHeader column="sku" label="SKU" sort={sort} onSort={requestSort} />
                     <th>Image</th>
-                    {(canUpdateProducts || canDeleteProducts) ? <th>Actions</th> : null}
+                    {(canUpdateProducts || canDeleteProducts) ? <th className="actions-cell">Actions</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -228,7 +286,7 @@ function ProductManagementPage() {
                             <span className={`status-badge ${getStatusLabel(product.status).toLowerCase()}`}>{getStatusLabel(product.status)}</span>
                           )}
                           {canUpdateProducts ? (
-                            <Link className="mini-btn edit-btn icon-action-btn" to={`/admin/products/${product.id}/edit`} aria-label={`Update ${getProductName(product)}`} title="Update product">
+                            <Link className="mini-btn edit-btn icon-action-btn" to={`/admin/products/${product.id}/edit?returnTo=${encodeURIComponent(productsReturnPath)}`} state={{ returnTo: productsReturnPath }} aria-label={`Update ${getProductName(product)}`} title="Update product">
                               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
                             </Link>
                           ) : null}

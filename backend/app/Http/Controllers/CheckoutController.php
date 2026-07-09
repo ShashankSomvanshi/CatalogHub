@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,8 +29,12 @@ class CheckoutController extends Controller
             'password' => ['required_if:customer_type,existing,new', 'nullable', 'string', 'min:8'],
             'password_confirmation' => ['required_if:customer_type,new', 'nullable', 'same:password'],
             'billing_address' => ['required', 'string', 'max:1000'],
+            'billing_city' => ['required', 'string', 'max:100'],
+            'billing_state' => ['required', 'string', 'max:100'],
             'billing_pincode' => ['required', 'string', 'max:12'],
             'shipping_address' => ['required', 'string', 'max:1000'],
+            'shipping_city' => ['required', 'string', 'max:100'],
+            'shipping_state' => ['required', 'string', 'max:100'],
             'shipping_pincode' => ['required', 'string', 'max:12'],
             'payment_method' => ['required', Rule::in(['card', 'upi', 'net_banking'])],
             'checkout_source' => ['nullable', Rule::in(['cart', 'buy_now'])],
@@ -62,13 +65,17 @@ class CheckoutController extends Controller
 
             $order = Order::create([
                 'user_id' => $user?->id,
-                'order_number' => 'ORD-' . now()->format('Ymd') . '-' . Str::upper(Str::random(8)),
+                'order_number' => 'ORD-'.now()->format('Ymd').'-'.Str::upper(Str::random(8)),
                 'customer_name' => $name,
                 'customer_email' => $validated['email'],
                 'customer_phone' => $phone,
                 'billing_address' => $validated['billing_address'],
+                'billing_city' => $validated['billing_city'],
+                'billing_state' => $validated['billing_state'],
                 'billing_pincode' => $validated['billing_pincode'],
                 'shipping_address' => $validated['shipping_address'],
+                'shipping_city' => $validated['shipping_city'],
+                'shipping_state' => $validated['shipping_state'],
                 'shipping_pincode' => $validated['shipping_pincode'],
                 'payment_method' => $validated['payment_method'],
                 'payment_status' => 'pending',
@@ -91,7 +98,7 @@ class CheckoutController extends Controller
             }
 
             $transaction = $order->transactions()->create([
-                'transaction_number' => 'TXN-' . now()->format('Ymd') . '-' . Str::upper(Str::random(10)),
+                'transaction_number' => 'TXN-'.now()->format('Ymd').'-'.Str::upper(Str::random(10)),
                 'amount' => $order->final_amount,
                 'currency' => 'INR',
                 'payment_gateway' => 'stripe',
@@ -131,8 +138,8 @@ class CheckoutController extends Controller
                         'transaction_id' => (string) $transaction->id,
                     ],
                 ],
-                'success_url' => $frontendUrl . '/payment/success?session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url' => $frontendUrl . '/payment/cancel?order=' . urlencode($order->order_number),
+                'success_url' => $frontendUrl.'/payment/success?session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url' => $frontendUrl.'/payment/cancel?order='.urlencode($order->order_number),
             ]);
 
             $transaction->update([
@@ -175,6 +182,7 @@ class CheckoutController extends Controller
             }
 
             abort_if(($user->status ?? 'active') !== 'active', 403, 'Your account is inactive.');
+
             return $user;
         }
 

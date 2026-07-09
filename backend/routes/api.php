@@ -2,14 +2,14 @@
 
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\ModulePermissionController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProfileController;
-use App\Http\Controllers\Admin\ModulePermissionController;
-use App\Http\Controllers\Admin\UserManagementController;
-use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SubAdminController;
 use App\Http\Controllers\Admin\SubAdminPermissionController;
+use App\Http\Controllers\Admin\TransactionController;
+use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\CartController;
@@ -59,6 +59,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/sub-admin-roles/{subAdminRole}', [RoleController::class, 'showSubAdminRole']);
     Route::put('/admin/sub-admin-roles/{subAdminRole}', [RoleController::class, 'updateSubAdminRole']);
     Route::delete('/admin/sub-admin-roles/{subAdminRole}', [RoleController::class, 'destroySubAdminRole']);
+    Route::get('/admin/role-modules', [ModulePermissionController::class, 'index']);
     Route::get('/admin/sub-admin-roles/{subAdminRole}/permissions', [ModulePermissionController::class, 'show']);
     Route::put('/admin/sub-admin-roles/{subAdminRole}/permissions', [ModulePermissionController::class, 'update']);
     Route::get('/admin/sub-admins', [SubAdminController::class, 'index']);

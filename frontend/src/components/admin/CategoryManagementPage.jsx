@@ -1,37 +1,47 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../../api/client.js'
-import { fetchCategories } from '../../api/categories.js'
+import { fetchCategoriesPage } from '../../api/categories.js'
 import { hasPermission } from '../../api/access.js'
 import { confirmDelete, showSuccess } from '../../utils/alerts.js'
 import SortableHeader from './SortableHeader.jsx'
-import useSortableRows from './useSortableRows.js'
-import { matchesTableSearch } from '../../utils/tableSearch.js'
+import useServerSort from './useServerSort.js'
 import TableLoader from './TableLoader.jsx'
 
 function CategoryManagementPage() {
   const storedAdmin = JSON.parse(localStorage.getItem('auth_user') || '{}')
+  const canCreateCategories = hasPermission('categories', 'create', storedAdmin)
   const canUpdateCategories = hasPermission('categories', 'update', storedAdmin)
   const canDeleteCategories = hasPermission('categories', 'delete', storedAdmin)
   const pageSizeOptions = [5, 10, 25]
+  const [searchParams, setSearchParams] = useSearchParams()
+  const readPositiveInt = (value, fallback) => {
+    const parsed = Number.parseInt(value, 10)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+  }
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState({ type: '', text: '' })
-  const [searchTerm, setSearchTerm] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || '')
+  const [currentPage, setCurrentPage] = useState(() => readPositiveInt(searchParams.get('page'), 1))
+  const [pageSize, setPageSize] = useState(() => {
+    const requestedSize = readPositiveInt(searchParams.get('per_page'), 10)
+    return pageSizeOptions.includes(requestedSize) ? requestedSize : 10
+  })
   const [updatingStatusId, setUpdatingStatusId] = useState(null)
+  const [meta, setMeta] = useState({ total: 0, last_page: 1, from: 0, to: 0 })
+  const { sort, requestSort } = useServerSort(searchParams.get('sort') || 'name', searchParams.get('direction') === 'desc' ? 'desc' : 'asc')
 
   const loadCategories = useCallback(async ({ showLoading = true, resetMessage = true } = {}) => {
     if (showLoading) setLoading(true)
     if (resetMessage) setMessage({ type: '', text: '' })
 
     try {
-      const loadedCategories = await fetchCategories()
-      setCategories(loadedCategories)
-      setCurrentPage(1)
+      const page = await fetchCategoriesPage({ page: currentPage, per_page: pageSize, search: searchTerm, sort: sort.key, direction: sort.direction })
+      setCategories(page.records)
+      setMeta(page.meta)
 
-      if (loadedCategories.length === 0) {
+      if (page.records.length === 0) {
         setMessage({ type: 'info', text: 'No categories returned by the admin API yet.' })
       }
     } catch (error) {
@@ -42,15 +52,25 @@ function CategoryManagementPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [currentPage, pageSize, searchTerm, sort.direction, sort.key])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      loadCategories({ showLoading: false, resetMessage: false })
-    }, 0)
+      loadCategories()
+    }, 300)
 
     return () => window.clearTimeout(timer)
   }, [loadCategories])
+
+  useEffect(() => {
+    const nextParams = new URLSearchParams()
+    if (currentPage > 1) nextParams.set('page', String(currentPage))
+    if (pageSize !== 10) nextParams.set('per_page', String(pageSize))
+    if (searchTerm.trim()) nextParams.set('search', searchTerm.trim())
+    if (sort.key !== 'name') nextParams.set('sort', sort.key)
+    if (sort.direction !== 'asc') nextParams.set('direction', sort.direction)
+    setSearchParams(nextParams, { replace: true })
+  }, [currentPage, pageSize, searchTerm, setSearchParams, sort.direction, sort.key])
 
   const handleDelete = async (categoryId) => {
     if (!await confirmDelete('category')) return
@@ -86,31 +106,20 @@ function CategoryManagementPage() {
     }
   }
 
-  const filteredCategories = useMemo(() => {
-    return categories.filter((category) => matchesTableSearch([
-      category.id,
-      category.name || category.category_name,
-      category.status,
-      category.created_at,
-    ], searchTerm))
-  }, [categories, searchTerm])
-
-  const { sortedRows, sort, requestSort } = useSortableRows(filteredCategories, {
-    id: (category) => Number(category.id),
-    name: (category) => category.name || category.category_name,
-    created: (category) => new Date(category.created_at).getTime(),
-  }, 'name')
-
-  const totalCategories = sortedRows.length
-  const totalPages = Math.max(1, Math.ceil(totalCategories / pageSize))
+  const totalCategories = meta.total || 0
+  const totalPages = meta.last_page || 1
   const safeCurrentPage = Math.min(currentPage, totalPages)
-  const startIndex = totalCategories === 0 ? 0 : (safeCurrentPage - 1) * pageSize
-  const endIndex = Math.min(startIndex + pageSize, totalCategories)
-
-  const categoryRows = useMemo(
-    () => sortedRows.slice(startIndex, endIndex),
-    [endIndex, sortedRows, startIndex],
-  )
+  const startIndex = meta.from ? meta.from - 1 : 0
+  const endIndex = meta.to || 0
+  const categoryRows = categories
+  const listSearchParams = new URLSearchParams()
+  if (currentPage > 1) listSearchParams.set('page', String(currentPage))
+  if (pageSize !== 10) listSearchParams.set('per_page', String(pageSize))
+  if (searchTerm.trim()) listSearchParams.set('search', searchTerm.trim())
+  if (sort.key !== 'name') listSearchParams.set('sort', sort.key)
+  if (sort.direction !== 'asc') listSearchParams.set('direction', sort.direction)
+  const listQuery = listSearchParams.toString()
+  const categoriesReturnPath = `/admin/categories${listQuery ? `?${listQuery}` : ''}`
 
   const getCategoryName = (category) => category.name || category.category_name || 'Unnamed category'
   const getStatusLabel = (status) => status || 'active'
@@ -129,24 +138,7 @@ function CategoryManagementPage() {
       <section className="admin-data-section">
         <article className="panel-card data-panel-card">
           <div className="panel-head data-panel-head">
-            <div>
-              <h3>Categories</h3>
-            </div>
-
             <div className="table-tools">
-              <label className="table-search">
-                Search
-                <input
-                  type="search"
-                  value={searchTerm}
-                  onChange={(event) => {
-                    setSearchTerm(event.target.value)
-                    setCurrentPage(1)
-                  }}
-                  placeholder="Search categories"
-                />
-              </label>
-
               <label>
                 Rows
                 <select
@@ -161,6 +153,23 @@ function CategoryManagementPage() {
                   ))}
                 </select>
               </label>
+
+              <div className="table-tools-actions">
+                <label className="table-search">
+                  Search
+                  <input
+                    type="search"
+                    value={searchTerm}
+                    onChange={(event) => {
+                      setSearchTerm(event.target.value)
+                      setCurrentPage(1)
+                    }}
+                    placeholder="Search categories"
+                  />
+                </label>
+
+                {canCreateCategories ? <Link to="/admin/categories/new" className="ghost-btn table-add-btn">Add Category</Link> : null}
+              </div>
             </div>
           </div>
 
@@ -178,7 +187,7 @@ function CategoryManagementPage() {
                     <SortableHeader column="id" label="ID" sort={sort} onSort={requestSort} />
                     <SortableHeader column="name" label="Name" sort={sort} onSort={requestSort} />
                     <SortableHeader column="created" label="Created" sort={sort} onSort={requestSort} />
-                    {canUpdateCategories || canDeleteCategories ? <th>Actions</th> : null}
+                    {canUpdateCategories || canDeleteCategories ? <th className="actions-cell">Actions</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -204,7 +213,7 @@ function CategoryManagementPage() {
                             <span className={`status-badge ${getStatusLabel(category.status).toLowerCase()}`}>{getStatusLabel(category.status)}</span>
                           )}
                           {canUpdateCategories ? (
-                            <Link className="mini-btn edit-btn icon-action-btn" to={`/admin/categories/${category.id}/edit`} aria-label={`Update ${getCategoryName(category)}`} title="Update category">
+                            <Link className="mini-btn edit-btn icon-action-btn" to={`/admin/categories/${category.id}/edit?returnTo=${encodeURIComponent(categoriesReturnPath)}`} state={{ returnTo: categoriesReturnPath }} aria-label={`Update ${getCategoryName(category)}`} title="Update category">
                               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
                             </Link>
                           ) : null}

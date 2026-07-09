@@ -21,10 +21,14 @@ export function normalizeCategories(payload) {
   return findCategoryArray(payload) || []
 }
 
-export async function fetchCategories() {
-  const response = await api.get('/api/admin/categories')
+export async function fetchCategoriesPage(params = {}) {
+  const response = await api.get('/api/admin/categories', { params })
+  return { records: normalizeCategories(response.data), meta: response.data?.meta || {} }
+}
 
-  return normalizeCategories(response.data)
+export async function fetchCategories() {
+  const page = await fetchCategoriesPage({ per_page: 100, sort: 'name', direction: 'asc' })
+  return page.records
 }
 
 export async function fetchPublicCategories() {

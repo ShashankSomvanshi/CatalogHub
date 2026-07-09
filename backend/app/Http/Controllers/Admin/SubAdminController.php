@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Admin\Concerns\AuthorizesAdminAccess;
+use App\Http\Controllers\Admin\Concerns\PaginatesAdminTables;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
@@ -13,20 +14,28 @@ use Illuminate\Validation\Rule;
 
 class SubAdminController extends Controller
 {
-    use AuthorizesAdminAccess;
+    use AuthorizesAdminAccess, PaginatesAdminTables;
 
     public function index(Request $request): JsonResponse
     {
         $this->ensureFullAdmin($request, 'Only admin can manage sub admins.');
 
-        $subAdmins = User::with(['subAdminPermissions', 'subAdminRole'])
+        $query = User::with(['subAdminPermissions', 'subAdminRole'])
             ->select('id', 'name', 'email', 'phone_no', 'role', 'role_id', 'sub_role_id', 'status', 'created_at')
             ->where(function ($query) {
                 $query->where('role_id', 2)->orWhere('role', 'sub_admin');
-            })
-            ->latest()
-            ->get()
-            ->map(function (User $user): array {
+            });
+        foreach ($this->searchTerms($request) as $term) {
+            $query->where(fn ($search) => $search
+                ->whereRaw('LOWER(name) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(email) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(phone_no) LIKE ?', ["%{$term}%"])
+                ->orWhereRaw('LOWER(status) LIKE ?', ["%{$term}%"])
+                ->orWhereHas('subAdminRole', fn ($role) => $role->whereRaw('LOWER(name) LIKE ?', ["%{$term}%"])));
+        }
+        $sort = ['id' => 'id', 'name' => 'name', 'contact' => 'email', 'status' => 'status'][$request->input('sort')] ?? 'created_at';
+        $subAdmins = $query->orderBy($sort, $request->input('direction') === 'asc' ? 'asc' : 'desc')->paginate($this->perPage($request));
+        $subAdmins->through(function (User $user): array {
                 $data = $user->toArray();
                 $data['permissions'] = $data['sub_admin_permissions'];
                 unset($data['sub_admin_permissions']);
@@ -34,7 +43,7 @@ class SubAdminController extends Controller
                 return $data;
             });
 
-        return response()->json(['sub_admins' => $subAdmins], 200);
+        return response()->json(['sub_admins' => $subAdmins->items(), 'meta' => $this->paginationMeta($subAdmins)], 200);
     }
 
     public function show(Request $request, User $subAdmin): JsonResponse

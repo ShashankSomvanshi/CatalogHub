@@ -61,7 +61,7 @@ function AddCategoryPage() {
       <Sidebar adminName={adminName} adminRole={adminRole} menuItems={menuItems} title="Admin Panel" subtitle="Manage users, categories, products, and permissions." />
 
       <section className="dashboard-main admin-panel-main">
-        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} />
+        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} title="Category / Add" />
 
         <section className="dashboard-main-content admin-main-content">
           <section className="admin-form-section">
@@ -71,7 +71,7 @@ function AddCategoryPage() {
                   <h3>Add Category</h3>
                   <p className="subtext">Create a category record for catalog organization.</p>
                 </div>
-                <Link to="/admin/categories" className="ghost-btn">Back to Categories</Link>
+                {/* <Link to="/admin/categories" className="ghost-btn">Back to Categories</Link> */}
               </div>
 
               <form className="admin-record-form" onSubmit={handleSubmit} noValidate>

@@ -13,6 +13,22 @@ class ModulePermissionController extends Controller
 {
     use AuthorizesAdminAccess;
 
+    public function index(Request $request): JsonResponse
+    {
+        $this->ensureAdminOrPermission($request, 'role_management', 'create');
+
+        return response()->json([
+            'modules' => Module::orderBy('id')->get(['id', 'module_name'])->map(fn (Module $module): array => [
+                'id' => $module->id,
+                'module_name' => $module->module_name,
+                'can_view' => false,
+                'can_create' => false,
+                'can_update' => false,
+                'can_delete' => false,
+            ]),
+        ]);
+    }
+
     public function show(Request $request, SubAdminRole $subAdminRole): JsonResponse
     {
         $this->ensureAdminOrPermission($request, 'role_management', 'view');

@@ -11,7 +11,7 @@ function getStoredProfileImage() {
   }
 }
 
-function AdminTopNavbar({ adminName, adminRole, onLogout, actionButton }) {
+function AdminTopNavbar({ adminName, adminRole, onLogout, actionButton, title = 'Dashboard' }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [theme, setTheme] = useState(() => {
     const savedTheme = localStorage.getItem('admin_theme')
@@ -34,6 +34,7 @@ function AdminTopNavbar({ adminName, adminRole, onLogout, actionButton }) {
     document.documentElement.dataset.adminTheme = theme
     document.documentElement.style.colorScheme = theme
     localStorage.setItem('admin_theme', theme)
+    window.dispatchEvent(new CustomEvent('admin-theme-change', { detail: { theme } }))
   }, [theme])
 
   useEffect(() => {
@@ -69,9 +70,7 @@ function AdminTopNavbar({ adminName, adminRole, onLogout, actionButton }) {
   return (
     <header className="topbar admin-topbar">
       <div>
-        <p className="eyebrow">Admin overview</p>
-        <h1>Welcome, {adminName}</h1>
-        <p className="subtext">{roleLabel}</p>
+        <h1>{title}</h1>
       </div>
 
       <div className="topbar-actions">

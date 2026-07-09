@@ -302,7 +302,7 @@ function RegisterPage() {
               <label><span className="field-label">Email address <span className="required-mark">*</span></span><input type="text" inputMode="email" placeholder="john@example.com" value={form.email} onChange={(event) => { setForm({ ...form, email: event.target.value }); setErrors({ ...errors, email: '' }) }} aria-invalid={Boolean(errors.email)} />{errors.email && <small className="field-error">{errors.email}</small>}</label>
               <label><span className="field-label">Phone number <span className="required-mark">*</span></span><input type="text" placeholder="Enter phone number" value={form.phone} onChange={(event) => { setForm({ ...form, phone: event.target.value }); setErrors({ ...errors, phone: '' }) }} aria-invalid={Boolean(errors.phone)} />{errors.phone && <small className="field-error">{errors.phone}</small>}</label>
               <label><span className="field-label">Password <span className="required-mark">*</span></span><input type="password" placeholder="Minimum 8 characters" value={form.password} onChange={(event) => { setForm({ ...form, password: event.target.value }); setErrors({ ...errors, password: '' }) }} aria-invalid={Boolean(errors.password)} />{errors.password && <small className="field-error">{errors.password}</small>}</label>
-              <label><span className="field-label">Confirm password <span className="required-mark">*</span></span><input type="password" placeholder="Re-enter password" value={form.confirm_password} onChange={(event) => { setForm({ ...form, confirm_password: event.target.value }); setErrors({ ...errors, confirm_password: '' }) }} aria-invalid={Boolean(errors.confirm_password)} />{errors.confirm_password && <small className="field-error">{errors.confirm_password}</small>}</label>
+              <label><span className="field-label">Confirm Password <span className="required-mark">*</span></span><input type="password" placeholder="Re-enter password" value={form.confirm_password} onChange={(event) => { setForm({ ...form, confirm_password: event.target.value }); setErrors({ ...errors, confirm_password: '' }) }} aria-invalid={Boolean(errors.confirm_password)} />{errors.confirm_password && <small className="field-error">{errors.confirm_password}</small>}</label>
               <label className="register-file-field"><span className="field-label">Profile picture</span> <span>Optional, JPG, PNG or WebP</span><input type="file" accept="image/jpg,image/jpeg,image/png,image/webp" onChange={(event) => setForm({ ...form, profile_pic: event.target.files?.[0] || null })} /></label>
               {message.text ? <p className={`status-message ${message.type}`}>{message.text}</p> : null}
               <button type="submit" className="submit-btn" disabled={loading}>{loading ? 'Creating account...' : 'Create account'}</button>
@@ -456,7 +456,7 @@ function AdminUsersPage() {
           adminName={adminName}
           adminRole={adminRole}
           onLogout={handleLogout}
-          actionButton={hasPermission('users', 'create', storedAdmin) ? <Link to="/admin/users/new" className="ghost-btn">Add New User</Link> : null}
+          title="Users"
         />
         <UserManagementPage />
         <DashboardFooter />
@@ -497,7 +497,7 @@ function AdminCategoriesPage() {
           adminName={adminName}
           adminRole={adminRole}
           onLogout={handleLogout}
-          actionButton={hasPermission('categories', 'create', storedAdmin) ? <Link to="/admin/categories/new" className="ghost-btn">Add Category</Link> : null}
+          title="Categories"
         />
         <CategoryManagementPage />
         <DashboardFooter />
@@ -538,7 +538,7 @@ function AdminProductsPage() {
           adminName={adminName}
           adminRole={adminRole}
           onLogout={handleLogout}
-          actionButton={hasPermission('products', 'create', storedAdmin) ? <Link to="/admin/products/new" className="ghost-btn">Add Product</Link> : null}
+          title="Products"
         />
         <ProductManagementPage />
         <DashboardFooter />
@@ -567,7 +567,7 @@ function AdminTransactionsPage({ detail = false }) {
     <main className="admin-dashboard-shell admin-panel-shell">
       <Sidebar adminName={adminName} adminRole={adminRole} menuItems={menuItems} title="Admin Panel" subtitle="Review customer orders and payment transactions." />
       <section className="dashboard-main admin-panel-main">
-        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} />
+        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} title={detail ? 'Transaction Detail' : 'Transactions'} />
         {detail ? <TransactionDetailPage /> : <TransactionManagementPage />}
         <DashboardFooter />
       </section>
@@ -603,7 +603,7 @@ function AdminDashboard() {
       />
 
       <section className="dashboard-main admin-panel-main">
-        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} />
+        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} title="Dashboard" />
         <AdminDashboardMain />
         <DashboardFooter />
       </section>
@@ -655,6 +655,7 @@ function AdminSubAdminsPage({ mode = 'list' }) {
           adminRole={adminRole}
           onLogout={handleLogout}
           actionButton={actionButton}
+          title={mode === 'list' ? 'Sub Admins' : mode === 'add' ? 'Add Sub Admin' : mode === 'edit' ? 'Edit Sub Admin' : 'Permissions'}
         />
         {renderContent()}
         <DashboardFooter />
@@ -694,7 +695,7 @@ function AdminRolePermissionsPage({ mode = 'list' }) {
           adminName={adminName}
           adminRole={adminRole}
           onLogout={handleLogout}
-          actionButton={mode === 'list' && hasPermission('role_management', 'create', storedAdmin) ? <Link to="/admin/role-permissions/new" className="ghost-btn">Add New Role</Link> : null}
+          title={mode === 'list' ? 'Role Management' : mode === 'add' ? 'Role Management / Add' : mode === 'edit' ? 'Role Management / Edit' : 'Role Management / Permissions'}
         />
         {mode === 'permissions' ? <SubAdminPermissionPage /> : mode === 'add' ? <RoleFormPage mode="add" /> : mode === 'edit' ? <RoleFormPage mode="edit" /> : <RolePermissionManagementPage />}
         <DashboardFooter />
@@ -730,7 +731,7 @@ function AdminProfilePage() {
       />
 
       <section className="dashboard-main admin-panel-main">
-        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} />
+        <AdminTopNavbar adminName={adminName} adminRole={adminRole} onLogout={handleLogout} title="Profile" />
         <ProfileSettingsPage />
         <DashboardFooter />
       </section>

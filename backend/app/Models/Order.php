@@ -10,7 +10,8 @@ class Order extends Model
 {
     protected $fillable = [
         'user_id', 'order_number', 'customer_name', 'customer_email', 'customer_phone',
-        'billing_address', 'billing_pincode', 'shipping_address', 'shipping_pincode',
+        'billing_address', 'billing_city', 'billing_state', 'billing_pincode',
+        'shipping_address', 'shipping_city', 'shipping_state', 'shipping_pincode',
         'payment_method', 'payment_status', 'subtotal', 'shipping_amount', 'final_amount', 'status',
     ];
 
